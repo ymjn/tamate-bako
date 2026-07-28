@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>あそびのもくじ</title>
+<style>
+  :root { color-scheme: light; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    min-height: 100%;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    font-family: "Hiragino Maru Gothic ProN", "Rounded Mplus 1c", "Yu Gothic", system-ui, sans-serif;
+  }
+  body {
+    background: linear-gradient(135deg, #ffd6e8, #cdeaff, #fff3bf, #d9f7d9);
+    background-size: 400% 400%;
+    animation: bgshift 24s ease-in-out infinite;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    box-sizing: border-box;
+    padding: 6vh 5vw 4vh;
+  }
+  @keyframes bgshift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  h1 {
+    font-size: clamp(28px, 7vw, 48px);
+    color: #5a4a6a;
+    text-shadow: 0 2px 0 rgba(255,255,255,0.6);
+    margin: 0 0 5vh;
+    text-align: center;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 24px;
+    width: 100%;
+    max-width: 700px;
+  }
+  .card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.75);
+    border-radius: 28px;
+    padding: 24px 12px;
+    text-decoration: none;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.12);
+    transition: transform 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .card:active {
+    transform: scale(0.94);
+  }
+  .card .icon {
+    font-size: clamp(48px, 12vw, 72px);
+    line-height: 1;
+  }
+  .card .label {
+    font-size: clamp(13px, 3.2vw, 20px);
+    color: #5a4a6a;
+    font-weight: bold;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<h1>あそびの もくじ</h1>
+<div class="grid" id="grid"></div>
+
+<script>
+  var GAMES = [
+    { title: "ぽんぽん", icon: "🫧", file: "pop-pop-game.html" },
+    { title: "よるのぽんぽん", icon: "👻", file: "night-pop-game.html" },
+    { title: "たからさがし", icon: "💎", file: "treasure-hunt-game.html" },
+    { title: "スタンプ", icon: "🖼️", file: "stamp-game.html" }
+  ];
+
+  var grid = document.getElementById("grid");
+  GAMES.forEach(function (game) {
+    var a = document.createElement("a");
+    a.className = "card";
+    a.href = game.file;
+    a.innerHTML =
+      '<span class="icon">' + game.icon + '</span>' +
+      '<span class="label">' + game.title + '</span>';
+    grid.appendChild(a);
+  });
+</script>
+</body>
+</html>

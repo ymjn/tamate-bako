@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>たからさがしゲーム</title>
+<style>
+  :root { color-scheme: light; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    background: linear-gradient(135deg, #f4d9a0, #2ec4b6, #ffd166, #1b9aaa);
+    background-size: 400% 400%;
+    animation: bgshift 26s ease-in-out infinite;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  @keyframes bgshift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    grid-template-rows: repeat(5, 1fr);
+    gap: 2.2vmin;
+    width: min(88vw, 88vh);
+    height: min(88vw, 88vh);
+    animation: boardIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  @keyframes boardIn {
+    0%   { transform: scale(0.7); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .cell {
+    perspective: 700px;
+    touch-action: none;
+  }
+  .cell-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transform-style: preserve-3d;
+    transition: transform 0.5s cubic-bezier(0.45, 0.05, 0.15, 1);
+  }
+  .cell.flipped .cell-inner {
+    transform: rotateY(180deg);
+  }
+  .cell-face {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 20%;
+    backface-visibility: hidden;
+    font-size: 8.5vmin;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.25);
+  }
+  .cell-front {
+    background: linear-gradient(155deg, #c99a56, #7a4e23);
+    animation: glow 2.4s ease-in-out infinite;
+  }
+  @keyframes glow {
+    0%, 100% { box-shadow: 0 4px 10px rgba(0,0,0,0.25); }
+    50%      { box-shadow: 0 4px 18px rgba(255, 214, 102, 0.55); }
+  }
+  .cell-back {
+    background: linear-gradient(155deg, #fff4da, #ffe6ad);
+    transform: rotateY(180deg);
+  }
+  .cell.treasure .cell-back {
+    background: linear-gradient(155deg, #fff9e6, #ffdf7a);
+    animation: treasureGlow 0.9s ease-in-out infinite;
+  }
+  @keyframes treasureGlow {
+    0%, 100% { box-shadow: 0 0 16px 4px rgba(255, 221, 87, 0.6); }
+    50%      { box-shadow: 0 0 30px 10px rgba(255, 221, 87, 0.95); }
+  }
+  .cell-inner:active .cell-face {
+    filter: brightness(0.92);
+  }
+  .particle {
+    position: fixed;
+    pointer-events: none;
+    will-change: transform, opacity;
+    animation-name: burst;
+    animation-timing-function: ease-out;
+    animation-fill-mode: forwards;
+  }
+  @keyframes burst {
+    0%   { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 1; }
+    100% { transform: translate(var(--dx), var(--dy)) scale(var(--end-scale, 0.4)) rotate(var(--rot, 0deg)); opacity: 0; }
+  }
+  #celebrate {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22vw;
+    pointer-events: none;
+    opacity: 0;
+  }
+  #celebrate.show {
+    animation: celebrate 1.4s ease-out forwards;
+  }
+  @keyframes celebrate {
+    0%   { transform: scale(0.3) rotate(-8deg); opacity: 0; }
+    30%  { transform: scale(1.2) rotate(4deg); opacity: 1; }
+    60%  { transform: scale(1) rotate(-2deg); opacity: 1; }
+    100% { transform: scale(1.4) rotate(0deg); opacity: 0; }
+  }
+  #back-btn {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    text-decoration: none;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    z-index: 2000;
+    touch-action: manipulation;
+    transition: transform 0.15s ease;
+  }
+  #back-btn:active {
+    transform: scale(0.9);
+  }
+</style>
+</head>
+<body>
+<a id="back-btn" href="index.html" aria-label="もくじにもどる">⬅️</a>
+<div id="board"></div>
+<div id="celebrate">💎</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var CLOSED = "🎁";
+  var TREASURE = "💎";
+  var DECOYS = [
+    "🐶", "🐱", "🐰", "🐻", "🐼", "🦁", "🐸", "🐷", "🐵", "🐥",
+    "🍎", "🍌", "🍓", "🍉", "🍇",
+    "🚗", "🚌", "🚀", "✈️", "🚂",
+    "⭐️", "🌈", "🎈", "🌸"
+  ];
+  var SIZE = 5;
+
+  var board = document.getElementById("board");
+  var celebrate = document.getElementById("celebrate");
+  var cells = [];
+  var resolving = false;
+  var audioCtx = null;
+
+  function ensureAudio() {
+    if (!audioCtx) {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      } catch (e) { /* オーディオが使えない環境は無視 */ }
+    }
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume();
+    }
+  }
+
+  var REVEAL_VARIANTS = [
+    function tick(t0) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(500, t0);
+      osc.frequency.exponentialRampToValueAtTime(700, t0 + 0.06);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.2, t0 + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.12);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.14);
+    },
+    function tock(t0) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(360, t0);
+      osc.frequency.exponentialRampToValueAtTime(260, t0 + 0.08);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.22, t0 + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.14);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.16);
+    },
+    function flip(t0) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(300, t0);
+      osc.frequency.exponentialRampToValueAtTime(500, t0 + 0.05);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.12, t0 + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.1);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.12);
+    }
+  ];
+
+  function playReveal() {
+    if (!audioCtx) return;
+    var variant = REVEAL_VARIANTS[Math.floor(Math.random() * REVEAL_VARIANTS.length)];
+    variant(audioCtx.currentTime);
+  }
+
+  function playTreasureFanfare() {
+    if (!audioCtx) return;
+    var t0 = audioCtx.currentTime;
+    [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach(function (freq, i) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      var start = t0 + i * 0.09;
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.32, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.35);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(start);
+      osc.stop(start + 0.38);
+    });
+  }
+
+  function rand(min, max) { return Math.random() * (max - min) + min; }
+  function randomDecoy() { return DECOYS[Math.floor(Math.random() * DECOYS.length)]; }
+
+  function burstParticles(x, y) {
+    var glyphs = ["✨", "⭐️", "🌟", "💛"];
+    var count = 14;
+    for (var i = 0; i < count; i++) {
+      var p = document.createElement("div");
+      p.className = "particle";
+      p.textContent = glyphs[Math.floor(Math.random() * glyphs.length)];
+      var size = rand(20, 38);
+      p.style.fontSize = size + "px";
+      p.style.left = (x - size / 2) + "px";
+      p.style.top = (y - size / 2) + "px";
+      var angle = rand(0, Math.PI * 2);
+      var dist = rand(60, 160);
+      p.style.setProperty("--dx", Math.cos(angle) * dist + "px");
+      p.style.setProperty("--dy", Math.sin(angle) * dist + "px");
+      p.style.setProperty("--rot", rand(-360, 360) + "deg");
+      p.style.animationDuration = "800ms";
+      document.body.appendChild(p);
+      (function (node) {
+        setTimeout(function () { node.remove(); }, 850);
+      })(p);
+    }
+  }
+
+  function buildBoard() {
+    for (var i = 0; i < SIZE * SIZE; i++) {
+      var cell = document.createElement("div");
+      cell.className = "cell";
+
+      var inner = document.createElement("div");
+      inner.className = "cell-inner";
+
+      var front = document.createElement("div");
+      front.className = "cell-face cell-front";
+      front.textContent = CLOSED;
+
+      var back = document.createElement("div");
+      back.className = "cell-face cell-back";
+
+      inner.appendChild(front);
+      inner.appendChild(back);
+      cell.appendChild(inner);
+      board.appendChild(cell);
+
+      var record = { el: cell, backEl: back, isTreasure: false };
+      cells.push(record);
+
+      (function (record) {
+        cell.addEventListener("pointerdown", function (ev) {
+          ev.preventDefault();
+          ensureAudio();
+          onTap(record);
+        }, { passive: false });
+      })(record);
+    }
+  }
+
+  var CLOSE_TRANSITION_MS = 500;
+
+  // 裏面の中身をシャッフルする。カードが全て伏せて裏面が隠れている間に呼ぶこと。
+  function fillRound() {
+    var treasureIndex = Math.floor(Math.random() * cells.length);
+    cells.forEach(function (record, i) {
+      record.isTreasure = i === treasureIndex;
+      record.backEl.textContent = record.isTreasure ? TREASURE : randomDecoy();
+    });
+  }
+
+  // 開いているカードを伏せてから、伏せ終わるのを待って中身をシャッフルする。
+  // 先に中身を書き換えると、閉じきる前の一瞬に次の宝石の位置が見えてしまうため。
+  function closeAndReshuffle() {
+    cells.forEach(function (record) {
+      record.el.classList.remove("flipped", "treasure");
+    });
+    setTimeout(function () {
+      fillRound();
+      resolving = false;
+    }, CLOSE_TRANSITION_MS + 20);
+  }
+
+  function onTap(record) {
+    if (resolving || record.el.classList.contains("flipped")) return;
+
+    record.el.classList.add("flipped");
+
+    if (record.isTreasure) {
+      resolving = true;
+      record.el.classList.add("treasure");
+      playTreasureFanfare();
+
+      var rect = record.el.getBoundingClientRect();
+      burstParticles(rect.left + rect.width / 2, rect.top + rect.height / 2);
+
+      celebrate.classList.remove("show");
+      void celebrate.offsetWidth;
+      celebrate.classList.add("show");
+
+      setTimeout(closeAndReshuffle, 1600);
+    } else {
+      playReveal();
+    }
+  }
+
+  document.addEventListener("touchmove", function (e) { e.preventDefault(); }, { passive: false });
+  document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  document.addEventListener("dblclick", function (e) { e.preventDefault(); });
+
+  buildBoard();
+  fillRound();
+})();
+</script>
+</body>
+</html>
