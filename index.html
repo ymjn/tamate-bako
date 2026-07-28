@@ -87,17 +87,24 @@
     { title: "たからさがし", icon: "💎", file: "treasure-hunt-game.html" },
     { title: "スタンプ", icon: "🖼️", file: "stamp-game.html" },
     { title: "そだてポン", icon: "🥚", file: "grow-pop-game.html" },
-    { title: "どうぶつビンゴ", icon: "🎪", file: "bingo-caller-game.html" }
+    { title: "どうぶつビンゴ", icon: "🎪", file: "bingo-caller-game.html" },
+    { title: "おえかきキラキラ", icon: "🌈", file: "draw-sparkle-game.html" }
   ];
+
+  // 既存のタイトルで問題なく収まっている最長の文字数(7文字)を基準にして、
+  // それより長いタイトルだけ文字サイズを比例して縮小し、カード内でキツキツにならないようにする。
+  var LABEL_BASE_LEN = 7;
 
   var grid = document.getElementById("grid");
   GAMES.forEach(function (game) {
+    var scale = Math.min(1, LABEL_BASE_LEN / game.title.length);
+    var labelSize = "clamp(13px, " + (3.2 * scale).toFixed(2) + "vw, " + Math.round(20 * scale) + "px)";
     var a = document.createElement("a");
     a.className = "card";
     a.href = game.file;
     a.innerHTML =
       '<span class="icon">' + game.icon + '</span>' +
-      '<span class="label">' + game.title + '</span>';
+      '<span class="label" style="font-size: ' + labelSize + '">' + game.title + '</span>';
     grid.appendChild(a);
   });
 </script>
