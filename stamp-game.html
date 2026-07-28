@@ -79,32 +79,6 @@
   #clear-btn { right: max(12px, env(safe-area-inset-right)); }
   #back-btn:active, #clear-btn:active { transform: scale(0.9); }
 
-  #toggle-btn {
-    position: fixed;
-    left: 50%;
-    bottom: max(16px, env(safe-area-inset-bottom));
-    transform: translateX(-50%);
-    width: 78px;
-    height: 78px;
-    border-radius: 50%;
-    background: #fff;
-    border: 4px solid #ffb84d;
-    box-shadow: 0 6px 16px rgba(0,0,0,0.25);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 38px;
-    z-index: 2100;
-    touch-action: manipulation;
-    transition: bottom 0.3s ease, transform 0.15s ease;
-  }
-  #toggle-btn.open {
-    bottom: calc(44vh + 14px);
-  }
-  #toggle-btn:active {
-    transform: translateX(-50%) scale(0.92);
-  }
-
   #picker {
     position: fixed;
     left: 0;
@@ -114,16 +88,11 @@
     background: rgba(255, 255, 255, 0.97);
     border-radius: 28px 28px 0 0;
     box-shadow: 0 -6px 20px rgba(0,0,0,0.2);
-    transform: translateY(100%);
-    transition: transform 0.3s ease;
     z-index: 1800;
     display: flex;
     flex-direction: column;
     padding-top: 10px;
     box-sizing: border-box;
-  }
-  #picker.open {
-    transform: translateY(0);
   }
   .picker-handle {
     width: 48px;
@@ -142,7 +111,7 @@
     touch-action: pan-x;
     display: grid;
     grid-auto-flow: column;
-    grid-template-rows: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
     grid-auto-columns: 72px;
     gap: 8px;
     padding: 6px 14px 20px;
@@ -171,7 +140,6 @@
 <div id="stage"></div>
 <a id="back-btn" href="index.html" aria-label="もくじにもどる">⬅️</a>
 <button id="clear-btn" aria-label="ぜんぶけす">🗑️</button>
-<button id="toggle-btn" aria-label="スタンプをえらぶ">⭐️</button>
 <div id="picker">
   <div class="picker-handle"></div>
   <div id="picker-grid"></div>
@@ -246,16 +214,11 @@
   ];
 
   var stage = document.getElementById("stage");
-  var toggleBtn = document.getElementById("toggle-btn");
-  var picker = document.getElementById("picker");
   var pickerGrid = document.getElementById("picker-grid");
   var clearBtn = document.getElementById("clear-btn");
 
   var currentStamp = "🤩";
-  var isOpen = false;
   var audioCtx = null;
-
-  toggleBtn.textContent = currentStamp;
 
   function ensureAudio() {
     if (!audioCtx) {
@@ -386,19 +349,6 @@
     playStampSound();
   }
 
-  // 開閉ボタンをタップした瞬間はパネルと絵文字がアニメーションで動いている途中のため、
-  // 指を離した位置にちょうど移動してきた絵文字がタップされたと誤判定されることがある。
-  // 開閉直後のこの時間だけ、絵文字の選択を無視するガードを設ける。
-  var OPEN_CLOSE_GUARD_MS = 350;
-  var openCloseGuardUntil = 0;
-
-  function setOpen(open) {
-    isOpen = open;
-    picker.classList.toggle("open", open);
-    toggleBtn.classList.toggle("open", open);
-    openCloseGuardUntil = performance.now() + OPEN_CLOSE_GUARD_MS;
-  }
-
   function buildPicker() {
     EMOJIS.forEach(function (emoji) {
       var btn = document.createElement("button");
@@ -406,10 +356,8 @@
       btn.textContent = emoji;
       if (emoji === currentStamp) btn.classList.add("selected");
       btn.addEventListener("click", function () {
-        if (performance.now() < openCloseGuardUntil) return;
         ensureAudio();
         currentStamp = emoji;
-        toggleBtn.textContent = emoji;
         pickerGrid.querySelectorAll(".emoji-btn.selected").forEach(function (b) {
           b.classList.remove("selected");
         });
@@ -419,12 +367,6 @@
       pickerGrid.appendChild(btn);
     });
   }
-
-  toggleBtn.addEventListener("pointerdown", function (ev) {
-    ev.preventDefault();
-    ensureAudio();
-    setOpen(!isOpen);
-  }, { passive: false });
 
   clearBtn.addEventListener("pointerdown", function (ev) {
     ev.preventDefault();
