@@ -386,10 +386,17 @@
     playStampSound();
   }
 
+  // 開閉ボタンをタップした瞬間はパネルと絵文字がアニメーションで動いている途中のため、
+  // 指を離した位置にちょうど移動してきた絵文字がタップされたと誤判定されることがある。
+  // 開閉直後のこの時間だけ、絵文字の選択を無視するガードを設ける。
+  var OPEN_CLOSE_GUARD_MS = 350;
+  var openCloseGuardUntil = 0;
+
   function setOpen(open) {
     isOpen = open;
     picker.classList.toggle("open", open);
     toggleBtn.classList.toggle("open", open);
+    openCloseGuardUntil = performance.now() + OPEN_CLOSE_GUARD_MS;
   }
 
   function buildPicker() {
@@ -399,6 +406,7 @@
       btn.textContent = emoji;
       if (emoji === currentStamp) btn.classList.add("selected");
       btn.addEventListener("click", function () {
+        if (performance.now() < openCloseGuardUntil) return;
         ensureAudio();
         currentStamp = emoji;
         toggleBtn.textContent = emoji;
