@@ -84,7 +84,6 @@
     left: 0;
     right: 0;
     bottom: 0;
-    height: 44vh;
     background: rgba(255, 255, 255, 0.97);
     border-radius: 28px 28px 0 0;
     box-shadow: 0 -6px 20px rgba(0,0,0,0.2);
@@ -103,15 +102,13 @@
     flex: none;
   }
   #picker-grid {
-    flex: 1;
-    min-height: 0;
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-x;
     display: grid;
     grid-auto-flow: column;
-    grid-template-rows: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 72px);
     grid-auto-columns: 72px;
     gap: 8px;
     padding: 6px 14px 20px;
