@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>どうぶつビンゴ</title>
+<style>
+  :root { color-scheme: light; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    background: linear-gradient(135deg, #ffd6e8, #cdeaff, #fff3bf, #d9f7d9);
+    background-size: 400% 400%;
+    animation: bgshift 24s ease-in-out infinite;
+  }
+  @keyframes bgshift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  #app {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  #display-section {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4vh;
+  }
+  #big-display {
+    line-height: 1;
+    filter: drop-shadow(0 10px 16px rgba(0,0,0,0.2));
+  }
+  #big-display.settle {
+    animation: settle 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes settle {
+    0%   { transform: scale(0.7); }
+    60%  { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
+  #toggle-btn {
+    border-radius: 50%;
+    background: #fff;
+    border: 4px solid #ffb84d;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: manipulation;
+    transition: transform 0.15s ease;
+  }
+  #toggle-btn:active {
+    transform: scale(0.92);
+  }
+  #toggle-btn.disabled {
+    opacity: 0.6;
+  }
+  #history-section {
+    flex: none;
+    height: 20vh;
+    box-sizing: border-box;
+    padding: 10px 14px max(10px, env(safe-area-inset-bottom));
+    display: flex;
+    align-items: center;
+    overflow-x: auto;
+    overflow-y: hidden;
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+    gap: 10px;
+  }
+  .history-chip {
+    flex: none;
+    width: 13vh;
+    height: 13vh;
+    max-width: 68px;
+    max-height: 68px;
+    border-radius: 22%;
+    background: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 7vh;
+    animation: chipin 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  @keyframes chipin {
+    0%   { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .particle {
+    position: fixed;
+    pointer-events: none;
+    will-change: transform, opacity;
+    animation-name: burst;
+    animation-timing-function: ease-out;
+    animation-fill-mode: forwards;
+  }
+  @keyframes burst {
+    0%   { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 1; }
+    100% { transform: translate(var(--dx), var(--dy)) scale(0.4) rotate(var(--rot, 0deg)); opacity: 0; }
+  }
+  #celebrate {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22vw;
+    pointer-events: none;
+    opacity: 0;
+  }
+  #celebrate.show {
+    animation: celebrate 1.4s ease-out forwards;
+  }
+  @keyframes celebrate {
+    0%   { transform: scale(0.3) rotate(-8deg); opacity: 0; }
+    30%  { transform: scale(1.2) rotate(4deg); opacity: 1; }
+    60%  { transform: scale(1) rotate(-2deg); opacity: 1; }
+    100% { transform: scale(1.4) rotate(0deg); opacity: 0; }
+  }
+  #back-btn, #reset-btn {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    text-decoration: none;
+    border: none;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    z-index: 2000;
+    touch-action: manipulation;
+    transition: transform 0.15s ease;
+  }
+  #back-btn { left: max(12px, env(safe-area-inset-left)); }
+  #reset-btn { right: max(12px, env(safe-area-inset-right)); }
+  #back-btn:active, #reset-btn:active { transform: scale(0.9); }
+</style>
+</head>
+<body>
+<a id="back-btn" href="index.html" aria-label="もくじにもどる">⬅️</a>
+<button id="reset-btn" aria-label="ビンゴをリセット">🔄</button>
+<div id="app">
+  <div id="display-section">
+    <div id="big-display">🎪</div>
+    <button id="toggle-btn" aria-label="つぎのどうぶつをひく">🎲</button>
+  </div>
+  <div id="history-section"></div>
+</div>
+<div id="celebrate">🎉</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // 動物の絵柄プール。重複なしで1つずつ引いていき、全部引いたらリセットするまで打ち止め。
+  var ANIMALS = ["🐶", "🐱", "🐰", "🐻", "🐼", "🦁", "🐸", "🐷", "🐵", "🐮", "🐔", "🐘"];
+  var STORAGE_KEY = "tamatebako_bingo_caller_v1";
+
+  var bigDisplay = document.getElementById("big-display");
+  var toggleBtn = document.getElementById("toggle-btn");
+  var resetBtn = document.getElementById("reset-btn");
+  var historySection = document.getElementById("history-section");
+  var celebrate = document.getElementById("celebrate");
+
+  var pool = [];
+  var history = [];
+  var cycling = false;
+  var cycleTimer = null;
+  var audioCtx = null;
+
+  function shuffle(array) {
+    var a = array.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+    }
+    return a;
+  }
+
+  function saveState() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ pool: pool, history: history }));
+    } catch (e) { /* ストレージが使えない環境は無視 */ }
+  }
+
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return false;
+      var data = JSON.parse(raw);
+      if (!Array.isArray(data.pool) || !Array.isArray(data.history)) return false;
+      pool = data.pool;
+      history = data.history;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function renderHistory() {
+    historySection.innerHTML = "";
+    history.forEach(function (emoji) {
+      var chip = document.createElement("div");
+      chip.className = "history-chip";
+      chip.textContent = emoji;
+      historySection.appendChild(chip);
+    });
+    historySection.scrollLeft = historySection.scrollWidth;
+  }
+
+  function resizeUI() {
+    var displayH = window.innerHeight * 0.8;
+    var size = Math.min(window.innerWidth * 0.5, displayH * 0.45);
+    bigDisplay.style.fontSize = size + "px";
+
+    var btnSize = Math.min(window.innerWidth * 0.24, displayH * 0.2, 96);
+    toggleBtn.style.width = btnSize + "px";
+    toggleBtn.style.height = btnSize + "px";
+    toggleBtn.style.fontSize = (btnSize * 0.45) + "px";
+  }
+
+  function ensureAudio() {
+    if (!audioCtx) {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      } catch (e) { /* オーディオが使えない環境は無視 */ }
+    }
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume();
+    }
+  }
+
+  function tone(freq, start, dur, type, peak) {
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.type = type || "sine";
+    osc.frequency.setValueAtTime(freq, start);
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(peak || 0.3, start + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(start);
+    osc.stop(start + dur + 0.02);
+  }
+
+  function playRevealSound() {
+    if (!audioCtx) return;
+    var t0 = audioCtx.currentTime;
+    tone(784, t0, 0.16, "sine", 0.3);
+    tone(1047, t0 + 0.1, 0.18, "sine", 0.3);
+  }
+
+  function playAllDoneChime() {
+    if (!audioCtx) return;
+    var t0 = audioCtx.currentTime;
+    [523, 659, 784, 1047].forEach(function (freq, i) {
+      tone(freq, t0 + i * 0.09, 0.3, "sine", 0.32);
+    });
+  }
+
+  // --- ドラムロール(連打する太鼓の音)をWeb Audioで合成する ---
+  var noiseBuffer = null;
+  var drumSources = [];
+
+  function getNoiseBuffer() {
+    if (!noiseBuffer) {
+      var len = Math.floor(audioCtx.sampleRate * 0.1);
+      noiseBuffer = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+      var data = noiseBuffer.getChannelData(0);
+      for (var i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    }
+    return noiseBuffer;
+  }
+
+  function playDrumHit(startTime) {
+    var src = audioCtx.createBufferSource();
+    src.buffer = getNoiseBuffer();
+    var filter = audioCtx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.value = 1800;
+    filter.Q.value = 0.8;
+    var gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.0001, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.5, startTime + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.07);
+    src.connect(filter).connect(gain).connect(audioCtx.destination);
+    src.start(startTime);
+    src.stop(startTime + 0.09);
+    drumSources.push(src);
+  }
+
+  // 太鼓の間隔をだんだん短くして、盛り上がっていく感じにする
+  function playDrumRoll(totalDurationSec) {
+    var t0 = audioCtx.currentTime;
+    var interval = 0.15;
+    var minInterval = 0.045;
+    var elapsed = 0;
+    while (elapsed < totalDurationSec) {
+      playDrumHit(t0 + elapsed);
+      var progress = elapsed / totalDurationSec;
+      elapsed += interval - (interval - minInterval) * progress;
+    }
+  }
+
+  function stopDrumRoll() {
+    drumSources.forEach(function (src) {
+      try { src.stop(); } catch (e) { /* すでに再生終了している場合は無視 */ }
+    });
+    drumSources = [];
+  }
+
+  function playResetSound() {
+    if (!audioCtx) return;
+    var t0 = audioCtx.currentTime;
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(500, t0);
+    osc.frequency.exponentialRampToValueAtTime(120, t0 + 0.3);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.35);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.36);
+  }
+
+  function rand(min, max) { return Math.random() * (max - min) + min; }
+
+  function burstParticles(glyphs, count) {
+    var rect = bigDisplay.getBoundingClientRect();
+    var x = rect.left + rect.width / 2;
+    var y = rect.top + rect.height / 2;
+    for (var i = 0; i < count; i++) {
+      var p = document.createElement("div");
+      p.className = "particle";
+      p.textContent = glyphs[Math.floor(Math.random() * glyphs.length)];
+      var size = rand(16, 30);
+      p.style.fontSize = size + "px";
+      p.style.left = (x - size / 2) + "px";
+      p.style.top = (y - size / 2) + "px";
+      var angle = rand(0, Math.PI * 2);
+      var dist = rand(50, 140);
+      p.style.setProperty("--dx", Math.cos(angle) * dist + "px");
+      p.style.setProperty("--dy", Math.sin(angle) * dist + "px");
+      p.style.setProperty("--rot", rand(-180, 180) + "deg");
+      p.style.animationDuration = "650ms";
+      document.body.appendChild(p);
+      (function (node) {
+        setTimeout(function () { node.remove(); }, 700);
+      })(p);
+    }
+  }
+
+  var DRAW_DURATION_SEC = 2.2;
+  var revealTimer = null;
+
+  function runDraw() {
+    if (cycling) return;
+    if (pool.length === 0) {
+      celebrate.textContent = "🏁";
+      celebrate.classList.remove("show");
+      void celebrate.offsetWidth;
+      celebrate.classList.add("show");
+      ensureAudio();
+      playAllDoneChime();
+      return;
+    }
+    cycling = true;
+    ensureAudio();
+    toggleBtn.classList.add("disabled");
+    playDrumRoll(DRAW_DURATION_SEC);
+    cycleTimer = setInterval(function () {
+      bigDisplay.textContent = ANIMALS[Math.floor(Math.random() * ANIMALS.length)];
+    }, 90);
+
+    revealTimer = setTimeout(function () {
+      clearInterval(cycleTimer);
+      cycling = false;
+      toggleBtn.classList.remove("disabled");
+      revealResult();
+    }, DRAW_DURATION_SEC * 1000);
+  }
+
+  function revealResult() {
+    var idx = Math.floor(Math.random() * pool.length);
+    var emoji = pool.splice(idx, 1)[0];
+    history.push(emoji);
+    saveState();
+
+    bigDisplay.textContent = emoji;
+    bigDisplay.classList.remove("settle");
+    void bigDisplay.offsetWidth;
+    bigDisplay.classList.add("settle");
+    playRevealSound();
+    burstParticles(["✨", "⭐️"], 8);
+    renderHistory();
+
+    if (pool.length === 0) {
+      setTimeout(function () {
+        celebrate.textContent = "🎉";
+        celebrate.classList.remove("show");
+        void celebrate.offsetWidth;
+        celebrate.classList.add("show");
+        playAllDoneChime();
+      }, 500);
+    }
+  }
+
+  function resetAll() {
+    ensureAudio();
+    if (cycling) {
+      cycling = false;
+      clearInterval(cycleTimer);
+      clearTimeout(revealTimer);
+      stopDrumRoll();
+      toggleBtn.classList.remove("disabled");
+    }
+    pool = shuffle(ANIMALS);
+    history = [];
+    saveState();
+    bigDisplay.textContent = "🎪";
+    renderHistory();
+    playResetSound();
+  }
+
+  toggleBtn.addEventListener("pointerdown", function (ev) {
+    ev.preventDefault();
+    runDraw();
+  }, { passive: false });
+
+  resetBtn.addEventListener("pointerdown", function (ev) {
+    ev.preventDefault();
+    resetAll();
+  }, { passive: false });
+
+  document.addEventListener("touchmove", function (e) {
+    if (e.target.closest && e.target.closest("#history-section")) return;
+    e.preventDefault();
+  }, { passive: false });
+  document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  document.addEventListener("dblclick", function (e) { e.preventDefault(); });
+
+  window.addEventListener("resize", resizeUI);
+
+  if (!loadState()) {
+    pool = shuffle(ANIMALS);
+    history = [];
+  }
+  resizeUI();
+  renderHistory();
+  if (history.length > 0) {
+    bigDisplay.textContent = history[history.length - 1];
+  }
+})();
+</script>
+</body>
+</html>
