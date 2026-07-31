@@ -87,6 +87,10 @@
     -webkit-user-select: none;
     user-select: none;
   }
+  .terms-hint {
+    font-size: 10px;
+    color: #a89bb8;
+  }
   .terms .terms-body {
     margin-top: 12px;
     padding: 14px 18px;
@@ -106,8 +110,8 @@
 <h1>あそびの もくじ</h1>
 <div class="grid" id="grid"></div>
 
-<details class="terms">
-  <summary>利用規約</summary>
+<details class="terms" id="terms">
+  <summary>利用規約 <span class="terms-hint">(5回タップすると開きます)</span></summary>
   <div class="terms-body">
     <p>このサイトは、個人が趣味で公開している幼児向けの無料ゲーム集です。</p>
     <p>通信や外部送信は行っておらず、個人情報の収集も一切行っていません。広告も掲載していません。</p>
@@ -146,6 +150,25 @@
       '<span class="icon">' + game.icon + '</span>' +
       '<span class="label" style="font-size: ' + labelSize + '">' + game.title + '</span>';
     grid.appendChild(a);
+  });
+
+  // 子どもが遊んでいて誤って開いてしまわないよう、利用規約は5回タップしないと開かないようにする。
+  // 閉じる操作は誤操作の心配がないので、そのまま1回で許可する。
+  var terms = document.getElementById("terms");
+  var termsSummary = terms.querySelector("summary");
+  var TERMS_TAPS_REQUIRED = 5;
+  var termsTapCount = 0;
+  termsSummary.addEventListener("click", function (ev) {
+    if (terms.open) {
+      termsTapCount = 0;
+      return;
+    }
+    ev.preventDefault();
+    termsTapCount++;
+    if (termsTapCount >= TERMS_TAPS_REQUIRED) {
+      termsTapCount = 0;
+      terms.open = true;
+    }
   });
 </script>
 </body>
