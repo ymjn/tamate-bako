@@ -93,6 +93,7 @@
     align-items: center;
     justify-content: center;
     font-size: 22vw;
+    white-space: nowrap;
     pointer-events: none;
     opacity: 0;
   }
@@ -366,8 +367,9 @@
     }
   }
 
-  function showCelebration(text, mode) {
+  function showCelebration(text, mode, fontSizeVw) {
     celebrate.textContent = text || "🎉";
+    celebrate.style.fontSize = fontSizeVw ? fontSizeVw + "vw" : "";
     celebrate.classList.remove("show", "grand");
     void celebrate.offsetWidth;
     celebrate.classList.add("show");
@@ -524,7 +526,7 @@
     lastOpenTime[kind] = now;
 
     if (isDoubleOpen) {
-      showCelebration("✨🔑🗝️✨", "grand");
+      showCelebration("✨🔑🗝️✨", "grand", 10);
       playDoubleOpenFanfare();
       doubleOpenConfetti();
     } else if (unlockCount % MILESTONE === 0) {
