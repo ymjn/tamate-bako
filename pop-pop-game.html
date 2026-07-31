@@ -64,6 +64,15 @@
     0%   { transform: scale(1); opacity: 1; }
     100% { transform: scale(1.6); opacity: 0; }
   }
+  .bubble.matched {
+    animation: popin 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+               float 3.2s ease-in-out infinite,
+               matchGlow 0.9s ease-in-out infinite;
+  }
+  @keyframes matchGlow {
+    0%, 100% { filter: drop-shadow(0 6px 10px rgba(0,0,0,0.15)) drop-shadow(0 0 2px gold); }
+    50%      { filter: drop-shadow(0 6px 10px rgba(0,0,0,0.15)) drop-shadow(0 0 26px gold); }
+  }
   .particle {
     position: absolute;
     pointer-events: none;
@@ -94,6 +103,27 @@
     30%  { transform: scale(1.2) rotate(4deg); opacity: 1; }
     60%  { transform: scale(1) rotate(-2deg); opacity: 1; }
     100% { transform: scale(1.4) rotate(0deg); opacity: 0; }
+  }
+  #celebrate.match {
+    animation: matchCelebrate 1.6s ease-out forwards;
+  }
+  @keyframes matchCelebrate {
+    0%   { transform: scale(0.2) rotate(-15deg); opacity: 0; }
+    25%  { transform: scale(1.3) rotate(8deg); opacity: 1; }
+    50%  { transform: scale(1.05) rotate(-4deg); opacity: 1; }
+    75%  { transform: scale(1.15) rotate(3deg); opacity: 1; }
+    100% { transform: scale(1.5) rotate(0deg); opacity: 0; }
+  }
+  #celebrate.grand {
+    animation: grandCelebrate 3s ease-out forwards;
+  }
+  @keyframes grandCelebrate {
+    0%   { transform: scale(0.2) rotate(-15deg); opacity: 0; filter: drop-shadow(0 0 0 gold); }
+    20%  { transform: scale(1.35) rotate(8deg); opacity: 1; filter: drop-shadow(0 0 22px gold); }
+    40%  { transform: scale(1.05) rotate(-5deg); opacity: 1; filter: drop-shadow(0 0 10px gold); }
+    60%  { transform: scale(1.3) rotate(4deg); opacity: 1; filter: drop-shadow(0 0 26px gold); }
+    80%  { transform: scale(1.1) rotate(-2deg); opacity: 1; filter: drop-shadow(0 0 12px gold); }
+    100% { transform: scale(1.5) rotate(0deg); opacity: 0; filter: drop-shadow(0 0 0 gold); }
   }
   #back-btn {
     position: fixed;
@@ -138,8 +168,11 @@
   ];
 
   var MAX_BUBBLES = 6;
+  var MATCH_COUNT = 3;
   var popCount = 0;
   var bubbles = new Set();
+  var matchedEmoji = null;
+  var grandFired = false;
   var audioCtx = null;
 
   function ensureAudio() {
@@ -236,6 +269,58 @@
     });
   }
 
+  // --- イースターエッグ: 同じ絵柄が画面上に3つ揃うと流れる特別なファンファーレ ---
+  function playMatchFanfare() {
+    if (!audioCtx) return;
+    var t0 = audioCtx.currentTime;
+    [523, 659, 784, 1047, 1319, 1568].forEach(function (freq, i) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      var start = t0 + i * 0.08;
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.3, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.26);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(start);
+      osc.stop(start + 0.28);
+    });
+  }
+
+  // --- イースターエッグ: 6つ全部が同じ絵柄で埋まったときの豪華なファンファーレ ---
+  function playGrandFanfare() {
+    if (!audioCtx) return;
+    var t0 = audioCtx.currentTime;
+    var melody = [523, 659, 784, 1047, 1319, 1568, 2093];
+    melody.forEach(function (freq, i) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      var start = t0 + i * 0.09;
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.32, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.3);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(start);
+      osc.stop(start + 0.32);
+    });
+    var chordStart = t0 + melody.length * 0.09 + 0.05;
+    [1047, 1319, 1568, 2093].forEach(function (freq) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, chordStart);
+      gain.gain.setValueAtTime(0.0001, chordStart);
+      gain.gain.exponentialRampToValueAtTime(0.22, chordStart + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, chordStart + 0.8);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(chordStart);
+      osc.stop(chordStart + 0.85);
+    });
+  }
+
   function rand(min, max) { return Math.random() * (max - min) + min; }
 
   // --- Particle effect variants: different glyphs & motion, one is chosen at random each pop ---
@@ -269,6 +354,33 @@
     }
   }
 
+  // --- イースターエッグ: 6つ全部揃ったときに降らせる紙吹雪 ---
+  function grandConfettiShower(emoji) {
+    var glyphs = [emoji, "✨", "🎉", "🌟"];
+    for (var i = 0; i < 30; i++) {
+      (function (i) {
+        setTimeout(function () {
+          var p = document.createElement("div");
+          p.className = "particle";
+          p.textContent = glyphs[Math.floor(Math.random() * glyphs.length)];
+          var size = rand(20, 38);
+          p.style.fontSize = size + "px";
+          var startX = rand(0, window.innerWidth);
+          p.style.left = (startX - size / 2) + "px";
+          p.style.top = "-40px";
+          var duration = rand(2000, 3200);
+          p.style.setProperty("--dx", rand(-60, 60) + "px");
+          p.style.setProperty("--dy", (window.innerHeight + 80) + "px");
+          p.style.setProperty("--rot", rand(-180, 180) + "deg");
+          p.style.setProperty("--end-scale", "0.9");
+          p.style.animationDuration = duration + "ms";
+          stage.appendChild(p);
+          setTimeout(function () { p.remove(); }, duration + 50);
+        }, i * 55);
+      })(i);
+    }
+  }
+
   function spawnBubble() {
     if (bubbles.size >= MAX_BUBBLES) return;
 
@@ -294,22 +406,102 @@
       ev.preventDefault();
       pop(el, ev.clientX, ev.clientY);
     }, { passive: false });
+
+    if (matchedEmoji === emoji) {
+      growMatch(el, emoji);
+    } else {
+      checkForMatch(emoji);
+    }
+  }
+
+  function showCelebration(text, mode, fontSizeVw) {
+    celebrate.textContent = text;
+    celebrate.classList.remove("show", "match", "grand");
+    celebrate.style.fontSize = fontSizeVw ? fontSizeVw + "vw" : "";
+    void celebrate.offsetWidth;
+    celebrate.classList.add("show");
+    if (mode) celebrate.classList.add(mode);
+  }
+
+  // --- イースターエッグ: 同じ絵柄のバブルを消さずに3つ以上揃えると光り出し、
+  //     増えるたびに絵文字も増えて演出、6つ全部揃うと一番豪華な演出に ---
+  var CELEBRATE_FONT_SIZE = { 3: 15, 4: 12, 5: 10, 6: 8 };
+
+  function countEmoji(emoji) {
+    var n = 0;
+    bubbles.forEach(function (el) {
+      if (el.textContent === emoji && !el.classList.contains("popping")) n++;
+    });
+    return n;
+  }
+
+  function checkForMatch(emoji) {
+    if (matchedEmoji) return;
+    var count = countEmoji(emoji);
+    if (count >= MATCH_COUNT) {
+      matchedEmoji = emoji;
+      grandFired = false;
+      bubbles.forEach(function (el) {
+        if (el.textContent === emoji && !el.classList.contains("popping")) {
+          el.classList.add("matched");
+          var rect = el.getBoundingClientRect();
+          burstParticles(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        }
+      });
+      celebrateForCount(emoji, count);
+    }
+  }
+
+  // 揃った絵柄と同じものが増えるたびに、絵文字を増やしてもう一度演出する
+  function growMatch(el, emoji) {
+    el.classList.add("matched");
+    var rect = el.getBoundingClientRect();
+    burstParticles(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    celebrateForCount(emoji, countEmoji(emoji));
+  }
+
+  function celebrateForCount(emoji, count) {
+    ensureAudio();
+    if (count >= MAX_BUBBLES) {
+      grandFired = true;
+      showCelebration(repeatEmoji(emoji, MAX_BUBBLES), "grand", CELEBRATE_FONT_SIZE[MAX_BUBBLES]);
+      playGrandFanfare();
+      grandConfettiShower(emoji);
+    } else {
+      showCelebration(repeatEmoji(emoji, count), "match", CELEBRATE_FONT_SIZE[count]);
+      playMatchFanfare();
+    }
+  }
+
+  function repeatEmoji(emoji, count) {
+    var text = "";
+    for (var i = 0; i < count; i++) text += emoji;
+    return text;
+  }
+
+  function clearMatch() {
+    if (!matchedEmoji) return;
+    matchedEmoji = null;
+    grandFired = false;
+    bubbles.forEach(function (el) {
+      el.classList.remove("matched");
+    });
   }
 
   function pop(el, x, y) {
     if (el.classList.contains("popping")) return;
     ensureAudio();
+    var wasMatched = el.classList.contains("matched");
     el.classList.add("popping");
     bubbles.delete(el);
     burstParticles(x, y);
     playPop();
 
+    if (wasMatched) clearMatch();
+
     popCount++;
     if (popCount % 8 === 0) {
-      celebrate.textContent = "🎉";
-      celebrate.classList.remove("show");
-      void celebrate.offsetWidth;
-      celebrate.classList.add("show");
+      showCelebration("🎉", null);
       playCelebrationChime();
     }
 

@@ -123,6 +123,18 @@
     60%  { transform: scale(1) rotate(-2deg); opacity: 1; }
     100% { transform: scale(1.4) rotate(0deg); opacity: 0; }
   }
+  #celebrate.grand {
+    font-size: 14vw;
+    animation: grandCelebrate 3s ease-out forwards;
+  }
+  @keyframes grandCelebrate {
+    0%   { transform: scale(0.2) rotate(-15deg); opacity: 0; filter: drop-shadow(0 0 0 gold); }
+    20%  { transform: scale(1.4) rotate(8deg); opacity: 1; filter: drop-shadow(0 0 24px gold); }
+    40%  { transform: scale(1.05) rotate(-5deg); opacity: 1; filter: drop-shadow(0 0 10px gold); }
+    60%  { transform: scale(1.3) rotate(4deg); opacity: 1; filter: drop-shadow(0 0 28px gold); }
+    80%  { transform: scale(1.1) rotate(-2deg); opacity: 1; filter: drop-shadow(0 0 14px gold); }
+    100% { transform: scale(1.5) rotate(0deg); opacity: 0; filter: drop-shadow(0 0 0 gold); }
+  }
   #back-btn {
     position: fixed;
     top: max(12px, env(safe-area-inset-top));
@@ -248,6 +260,39 @@
     });
   }
 
+  // --- イースターエッグ: 最後の1マスが宝石だったときの豪華なファンファーレ ---
+  function playGrandTreasureFanfare() {
+    if (!audioCtx) return;
+    var t0 = audioCtx.currentTime;
+    var melody = [523.25, 659.25, 783.99, 1046.5, 1318.5, 1567.98, 2093];
+    melody.forEach(function (freq, i) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      var start = t0 + i * 0.09;
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.34, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.35);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(start);
+      osc.stop(start + 0.38);
+    });
+    var chordStart = t0 + melody.length * 0.09 + 0.05;
+    [1046.5, 1318.5, 1567.98, 2093].forEach(function (freq) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, chordStart);
+      gain.gain.setValueAtTime(0.0001, chordStart);
+      gain.gain.exponentialRampToValueAtTime(0.24, chordStart + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, chordStart + 0.9);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(chordStart);
+      osc.stop(chordStart + 0.95);
+    });
+  }
+
   function rand(min, max) { return Math.random() * (max - min) + min; }
   function randomDecoy() { return DECOYS[Math.floor(Math.random() * DECOYS.length)]; }
 
@@ -272,6 +317,33 @@
       (function (node) {
         setTimeout(function () { node.remove(); }, 850);
       })(p);
+    }
+  }
+
+  // --- イースターエッグ: 最後の1マスが宝石だったときに降らせる紙吹雪 ---
+  function treasureConfettiShower() {
+    var glyphs = ["💎", "✨", "⭐️", "🌟"];
+    for (var i = 0; i < 30; i++) {
+      (function (i) {
+        setTimeout(function () {
+          var p = document.createElement("div");
+          p.className = "particle";
+          p.textContent = glyphs[Math.floor(Math.random() * glyphs.length)];
+          var size = rand(20, 38);
+          p.style.fontSize = size + "px";
+          var startX = rand(0, window.innerWidth);
+          p.style.left = (startX - size / 2) + "px";
+          p.style.top = "-40px";
+          var duration = rand(2000, 3200);
+          p.style.setProperty("--dx", rand(-60, 60) + "px");
+          p.style.setProperty("--dy", (window.innerHeight + 80) + "px");
+          p.style.setProperty("--rot", rand(-180, 180) + "deg");
+          p.style.setProperty("--end-scale", "0.9");
+          p.style.animationDuration = duration + "ms";
+          document.body.appendChild(p);
+          setTimeout(function () { p.remove(); }, duration + 50);
+        }, i * 55);
+      })(i);
     }
   }
 
@@ -334,21 +406,37 @@
   function onTap(record) {
     if (resolving || record.el.classList.contains("flipped")) return;
 
+    // 宝石が最後の1マスだったか(=他が全部開いていたか)を、開ける前に判定しておく
+    var isLastCell = cells.every(function (r) {
+      return r === record || r.el.classList.contains("flipped");
+    });
+
     record.el.classList.add("flipped");
 
     if (record.isTreasure) {
       resolving = true;
       record.el.classList.add("treasure");
-      playTreasureFanfare();
 
       var rect = record.el.getBoundingClientRect();
       burstParticles(rect.left + rect.width / 2, rect.top + rect.height / 2);
 
-      celebrate.classList.remove("show");
-      void celebrate.offsetWidth;
-      celebrate.classList.add("show");
-
-      setTimeout(closeAndReshuffle, 1600);
+      if (isLastCell) {
+        // イースターエッグ: 最後の1マスが宝石だった、特別な演出
+        celebrate.textContent = "✨💎✨";
+        celebrate.classList.remove("show", "grand");
+        void celebrate.offsetWidth;
+        celebrate.classList.add("show", "grand");
+        playGrandTreasureFanfare();
+        treasureConfettiShower();
+        setTimeout(closeAndReshuffle, 3200);
+      } else {
+        celebrate.textContent = TREASURE;
+        celebrate.classList.remove("show", "grand");
+        void celebrate.offsetWidth;
+        celebrate.classList.add("show");
+        playTreasureFanfare();
+        setTimeout(closeAndReshuffle, 1600);
+      }
     } else {
       playReveal();
     }

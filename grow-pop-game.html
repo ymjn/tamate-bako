@@ -103,6 +103,18 @@
     60%  { transform: scale(1) rotate(-2deg); opacity: 1; }
     100% { transform: scale(1.4) rotate(0deg); opacity: 0; }
   }
+  #celebrate.grand {
+    font-size: 8vw;
+    animation: grandCelebrate 3s ease-out forwards;
+  }
+  @keyframes grandCelebrate {
+    0%   { transform: scale(0.2) rotate(-15deg); opacity: 0; filter: drop-shadow(0 0 0 gold); }
+    20%  { transform: scale(1.4) rotate(8deg); opacity: 1; filter: drop-shadow(0 0 24px gold); }
+    40%  { transform: scale(1.05) rotate(-5deg); opacity: 1; filter: drop-shadow(0 0 10px gold); }
+    60%  { transform: scale(1.3) rotate(4deg); opacity: 1; filter: drop-shadow(0 0 28px gold); }
+    80%  { transform: scale(1.1) rotate(-2deg); opacity: 1; filter: drop-shadow(0 0 14px gold); }
+    100% { transform: scale(1.5) rotate(0deg); opacity: 0; filter: drop-shadow(0 0 0 gold); }
+  }
   #back-btn {
     position: fixed;
     top: max(12px, env(safe-area-inset-top));
@@ -250,6 +262,39 @@
     });
   }
 
+  // --- イースターエッグ: 画面上の6羽が全員🐓まで育ちきったときの豪華なファンファーレ ---
+  function playGrandGrowFanfare() {
+    if (!audioCtx) return;
+    var t0 = audioCtx.currentTime;
+    var melody = [784, 988, 1175, 1319, 1568, 1976, 2349];
+    melody.forEach(function (freq, i) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      var start = t0 + i * 0.08;
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.3, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.26);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(start);
+      osc.stop(start + 0.28);
+    });
+    var chordStart = t0 + melody.length * 0.08 + 0.05;
+    [1319, 1568, 1976, 2349].forEach(function (freq) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, chordStart);
+      gain.gain.setValueAtTime(0.0001, chordStart);
+      gain.gain.exponentialRampToValueAtTime(0.24, chordStart + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, chordStart + 0.85);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(chordStart);
+      osc.stop(chordStart + 0.9);
+    });
+  }
+
   function rand(min, max) { return Math.random() * (max - min) + min; }
 
   var GROW_PARTICLES = { glyphs: ["🪶", "✨"], count: 6, angle: [0, Math.PI * 2], dist: [30, 70], rot: [-30, 30], duration: 500, size: [16, 26] };
@@ -275,6 +320,56 @@
         setTimeout(function () { node.remove(); }, life + 50);
       })(p, v.duration);
     }
+  }
+
+  // --- イースターエッグ: 6羽全員が育ちきったときに降らせる紙吹雪 ---
+  function grandConfettiShower() {
+    var glyphs = ["🐓", "🪶", "✨", "⭐️"];
+    for (var i = 0; i < 30; i++) {
+      (function (i) {
+        setTimeout(function () {
+          var p = document.createElement("div");
+          p.className = "particle";
+          p.textContent = glyphs[Math.floor(Math.random() * glyphs.length)];
+          var size = rand(20, 38);
+          p.style.fontSize = size + "px";
+          var startX = rand(0, window.innerWidth);
+          p.style.left = (startX - size / 2) + "px";
+          p.style.top = "-40px";
+          var duration = rand(2000, 3200);
+          p.style.setProperty("--dx", rand(-60, 60) + "px");
+          p.style.setProperty("--dy", (window.innerHeight + 80) + "px");
+          p.style.setProperty("--rot", rand(-180, 180) + "deg");
+          p.style.setProperty("--end-scale", "0.9");
+          p.style.animationDuration = duration + "ms";
+          stage.appendChild(p);
+          setTimeout(function () { p.remove(); }, duration + 50);
+        }, i * 55);
+      })(i);
+    }
+  }
+
+  function showCelebration(text, mode) {
+    celebrate.textContent = text;
+    celebrate.classList.remove("show", "grand");
+    void celebrate.offsetWidth;
+    celebrate.classList.add("show");
+    if (mode) celebrate.classList.add(mode);
+  }
+
+  // 画面上の6羽が全員🐓まで育ちきったかどうかを確認する
+  function checkAllGrown() {
+    if (bubbles.size < MAX_BUBBLES) return;
+    var allGrown = true;
+    bubbles.forEach(function (r) {
+      if (r.stage !== LAST_STAGE) allGrown = false;
+    });
+    if (!allGrown) return;
+
+    ensureAudio();
+    showCelebration(STAGES[LAST_STAGE].repeat(MAX_BUBBLES), "grand");
+    playGrandGrowFanfare();
+    grandConfettiShower();
   }
 
   function spawnBubble() {
@@ -317,6 +412,7 @@
       record.el.classList.add("growing");
       burstParticles(x, y, GROW_PARTICLES);
       playGrowSound();
+      if (record.stage === LAST_STAGE) checkAllGrown();
       return;
     }
 
@@ -327,10 +423,7 @@
 
     popCount++;
     if (popCount % 8 === 0) {
-      celebrate.textContent = "🎉";
-      celebrate.classList.remove("show");
-      void celebrate.offsetWidth;
-      celebrate.classList.add("show");
+      showCelebration("🎉", null);
       playCelebrationChime();
     }
 

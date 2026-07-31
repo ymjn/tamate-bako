@@ -45,6 +45,17 @@
     70%  { transform: scale(1.2) rotate(var(--r, 0deg)); opacity: 1; }
     100% { transform: scale(1) rotate(var(--r, 0deg)); opacity: 1; }
   }
+  .stamp.scurry {
+    animation: scurryOff 0.6s ease-in forwards;
+  }
+  @keyframes scurryOff {
+    0%   { transform: translateX(0) translateY(0) rotate(var(--r, 0deg)); }
+    20%  { transform: translateX(calc(var(--run-dx) * 0.15)) translateY(-8px) rotate(var(--r, 0deg)); }
+    40%  { transform: translateX(calc(var(--run-dx) * 0.4)) translateY(3px) rotate(var(--r, 0deg)); }
+    60%  { transform: translateX(calc(var(--run-dx) * 0.65)) translateY(-8px) rotate(var(--r, 0deg)); }
+    80%  { transform: translateX(calc(var(--run-dx) * 0.85)) translateY(3px) rotate(var(--r, 0deg)); }
+    100% { transform: translateX(var(--run-dx)) translateY(0) rotate(var(--r, 0deg)); }
+  }
   .particle {
     position: fixed;
     pointer-events: none;
@@ -290,6 +301,39 @@
     osc.stop(t0 + 0.14);
   }
 
+  // --- イースターエッグ: 🐀 だけ、逃げていくときの鳴き声+小走りの音 ---
+  function playScurrySound() {
+    if (!audioCtx) return;
+    var t0 = audioCtx.currentTime;
+    [1600, 2000].forEach(function (freq, i) {
+      var start = t0 + i * 0.07;
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, start);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.7, start + 0.09);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.22, start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.11);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(start);
+      osc.stop(start + 0.13);
+    });
+    for (var i = 0; i < 6; i++) {
+      var start = t0 + 0.15 + i * 0.06;
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(140 + Math.random() * 40, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.08, start + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.04);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(start);
+      osc.stop(start + 0.05);
+    }
+  }
+
   function playClearSound() {
     if (!audioCtx) return;
     var t0 = audioCtx.currentTime;
@@ -330,6 +374,29 @@
     }
   }
 
+  // --- イースターエッグ: 🐀 が逃げていくときの砂ぼこり ---
+  function dustPuff(x, y) {
+    var count = 5;
+    for (var i = 0; i < count; i++) {
+      var p = document.createElement("div");
+      p.className = "particle";
+      p.textContent = "💨";
+      var size = rand(16, 26);
+      p.style.fontSize = size + "px";
+      p.style.left = (x - size / 2) + "px";
+      p.style.top = (y - size / 2) + "px";
+      var angle = rand(Math.PI * 0.6, Math.PI * 1.4);
+      var dist = rand(20, 50);
+      p.style.setProperty("--dx", Math.cos(angle) * dist + "px");
+      p.style.setProperty("--dy", Math.sin(angle) * dist + "px");
+      p.style.animationDuration = "450ms";
+      document.body.appendChild(p);
+      (function (node) {
+        setTimeout(function () { node.remove(); }, 480);
+      })(p);
+    }
+  }
+
   function placeStamp(x, y) {
     var size = rand(64, 92);
     var el = document.createElement("div");
@@ -344,6 +411,18 @@
     stage.appendChild(el);
     sparkle(x, y);
     playStampSound();
+
+    if (currentStamp === "🐀") {
+      el.style.setProperty("--run-dx", -(x + size + 60) + "px");
+      setTimeout(function () {
+        el.classList.add("scurry");
+        dustPuff(x, y);
+        playScurrySound();
+      }, 320);
+      setTimeout(function () {
+        el.remove();
+      }, 320 + 650);
+    }
   }
 
   function buildPicker() {
