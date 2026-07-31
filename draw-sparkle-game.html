@@ -264,6 +264,107 @@
     variant(audioCtx.currentTime, freqFromY(y));
   }
 
+  // --- イースターエッグ: 同じ場所を長押しすると花火が上がる ---
+  var FIREWORK_GLYPHS = ["✨", "🎆", "💫"];
+
+  function spawnFireworkParticle(x, y) {
+    var size = rand(20, 34);
+    var p = document.createElement("div");
+    p.className = "particle";
+    p.textContent = FIREWORK_GLYPHS[Math.floor(Math.random() * FIREWORK_GLYPHS.length)];
+    p.style.fontSize = size + "px";
+    p.style.left = (x - size / 2) + "px";
+    p.style.top = (y - size / 2) + "px";
+    var angle = rand(0, Math.PI * 2);
+    var dist = rand(60, 140);
+    p.style.setProperty("--dx", Math.cos(angle) * dist + "px");
+    p.style.setProperty("--dy", Math.sin(angle) * dist + "px");
+    p.style.setProperty("--rot", rand(-180, 180) + "deg");
+    var duration = rand(700, 1100);
+    p.style.animationDuration = duration + "ms";
+    document.body.appendChild(p);
+    setTimeout(function () { p.remove(); }, duration + 60);
+  }
+
+  var FIREWORK_VARIANTS = [
+    function fireworkA(t0) {
+      [523.25, 659.25, 783.99, 1046.5].forEach(function (freq, i) {
+        var start = t0 + i * 0.07;
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.2, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.22);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(start);
+        osc.stop(start + 0.24);
+      });
+    },
+    function fireworkB(t0) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(300, t0);
+      osc.frequency.exponentialRampToValueAtTime(1400, t0 + 0.35);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.22, t0 + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.4);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.42);
+    },
+    function fireworkC(t0) {
+      [0, 1, 2].forEach(function (i) {
+        var start = t0 + i * 0.09;
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(700 + i * 260, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.16, start + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.15);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(start);
+        osc.stop(start + 0.17);
+      });
+    }
+  ];
+
+  function playFireworkSound() {
+    if (!audioCtx) return;
+    var variant = FIREWORK_VARIANTS[Math.floor(Math.random() * FIREWORK_VARIANTS.length)];
+    variant(audioCtx.currentTime);
+  }
+
+  function triggerFirework(x, y) {
+    var count = Math.floor(rand(14, 20));
+    for (var i = 0; i < count; i++) {
+      spawnFireworkParticle(x, y);
+    }
+    playFireworkSound();
+  }
+
+  var FIREWORK_HOLD_MS = 850;
+  var FIREWORK_REPEAT_MS = 700;
+  var FIREWORK_TOLERANCE = 14;
+
+  // 指を置いたまま動かさずにいると花火が上がる。少しでも動いたら判定を打ち切る。
+  function scheduleFirework(state) {
+    state.holdTimer = setTimeout(function () {
+      triggerFirework(state.holdOrigin.x, state.holdOrigin.y);
+      state.holdInterval = setInterval(function () {
+        triggerFirework(state.holdOrigin.x, state.holdOrigin.y);
+      }, FIREWORK_REPEAT_MS);
+    }, FIREWORK_HOLD_MS);
+  }
+
+  function cancelFirework(state) {
+    if (state.holdTimer) { clearTimeout(state.holdTimer); state.holdTimer = null; }
+    if (state.holdInterval) { clearInterval(state.holdInterval); state.holdInterval = null; }
+  }
+
   function playClearSound() {
     if (!audioCtx) return;
     var t0 = audioCtx.currentTime;
@@ -290,14 +391,19 @@
     if (canvas.setPointerCapture) {
       try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
     }
-    pointers.set(e.pointerId, {
+    var state = {
       x: e.clientX,
       y: e.clientY,
       distSinceSparkle: 0,
       sparkleThreshold: rand(45, 80),
       lastSoundTime: performance.now(),
-      soundThreshold: rand(60, 100)
-    });
+      soundThreshold: rand(60, 100),
+      holdOrigin: { x: e.clientX, y: e.clientY },
+      holdTimer: null,
+      holdInterval: null
+    };
+    pointers.set(e.pointerId, state);
+    scheduleFirework(state);
     drawDot(e.clientX, e.clientY);
     spawnSparkle(e.clientX, e.clientY);
     playTwinkle(e.clientY);
@@ -311,6 +417,12 @@
     var dist = Math.hypot(x - state.x, y - state.y);
     if (dist > 0.5) {
       drawSegment(state.x, state.y, x, y);
+    }
+
+    if (state.holdTimer || state.holdInterval) {
+      if (Math.hypot(x - state.holdOrigin.x, y - state.holdOrigin.y) > FIREWORK_TOLERANCE) {
+        cancelFirework(state);
+      }
     }
 
     state.distSinceSparkle += dist;
@@ -332,6 +444,8 @@
   }
 
   function handleUp(e) {
+    var state = pointers.get(e.pointerId);
+    if (state) cancelFirework(state);
     pointers.delete(e.pointerId);
   }
 
@@ -343,6 +457,7 @@
   clearBtn.addEventListener("pointerdown", function (ev) {
     ev.preventDefault();
     ensureAudio();
+    pointers.forEach(cancelFirework);
     pointers.clear();
     clearCanvas();
     playClearSound();
