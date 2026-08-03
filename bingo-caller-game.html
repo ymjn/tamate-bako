@@ -135,7 +135,7 @@
     60%  { transform: scale(1) rotate(-2deg); opacity: 1; }
     100% { transform: scale(1.4) rotate(0deg); opacity: 0; }
   }
-  #back-btn, #reset-btn {
+  #back-btn, #reset-btn, #print-btn {
     position: fixed;
     top: max(12px, env(safe-area-inset-top));
     width: 52px;
@@ -155,12 +155,17 @@
   }
   #back-btn { left: max(12px, env(safe-area-inset-left)); }
   #reset-btn { right: max(12px, env(safe-area-inset-right)); }
-  #back-btn:active, #reset-btn:active { transform: scale(0.9); }
+  #print-btn {
+    right: max(12px, env(safe-area-inset-right));
+    top: calc(max(12px, env(safe-area-inset-top)) + 62px);
+  }
+  #back-btn:active, #reset-btn:active, #print-btn:active { transform: scale(0.9); }
 </style>
 </head>
 <body>
 <a id="back-btn" href="index.html" aria-label="もくじにもどる">⬅️</a>
 <button id="reset-btn" aria-label="ビンゴをリセット">🔄</button>
+<button id="print-btn" aria-label="ビンゴカードを印刷">🖨️</button>
 <div id="app">
   <div id="display-section">
     <div id="big-display">🎪</div>
@@ -181,6 +186,7 @@
   var bigDisplay = document.getElementById("big-display");
   var toggleBtn = document.getElementById("toggle-btn");
   var resetBtn = document.getElementById("reset-btn");
+  var printBtn = document.getElementById("print-btn");
   var historySection = document.getElementById("history-section");
   var celebrate = document.getElementById("celebrate");
 
@@ -454,6 +460,11 @@
   resetBtn.addEventListener("pointerdown", function (ev) {
     ev.preventDefault();
     resetAll();
+  }, { passive: false });
+
+  printBtn.addEventListener("pointerdown", function (ev) {
+    ev.preventDefault();
+    window.open("bingo-card-print.html", "_blank");
   }, { passive: false });
 
   document.addEventListener("touchmove", function (e) {
