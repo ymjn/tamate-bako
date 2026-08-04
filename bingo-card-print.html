@@ -93,12 +93,6 @@
     border-radius: 3mm;
     background: #fff;
   }
-  .cell.free {
-    border: 2px solid #333;
-  }
-  .cell-glyph {
-    transform: translateY(0.1em);
-  }
   .card-name {
     grid-column: 1 / -1;
     width: 100%;
@@ -135,9 +129,9 @@
 (function () {
   "use strict";
 
-  // bingo-caller-game.html と同じ動物プール(呼び上げと一致させる)
-  var ANIMALS = ["🐶", "🐱", "🐰", "🐻", "🐼", "🦁", "🐸", "🐷", "🐵", "🐮", "🐔", "🐘"];
-  var FREE_GLYPH = "⭐️";
+  // bingo-caller-game.html と同じ動物プール(呼び上げと一致させる)。
+  // 顔だけの絵文字は認識しにくいため、全身が描かれた絵柄で統一している。
+  var ANIMALS = ["🐀", "🐄", "🐅", "🐌", "🐍", "🐘", "🐞", "🐢", "🐳", "🦈", "🦒", "🦓"];
   var CARD_COUNT = 4;
 
   var sheet = document.getElementById("sheet");
@@ -154,7 +148,7 @@
   }
 
   function buildCard() {
-    var picks = shuffle(ANIMALS).slice(0, 8);
+    var picks = shuffle(ANIMALS).slice(0, 9);
     var card = document.createElement("div");
     card.className = "card";
 
@@ -167,14 +161,8 @@
       var cell = document.createElement("div");
       var glyph = document.createElement("span");
       glyph.className = "cell-glyph";
-      if (i === 4) {
-        cell.className = "cell free";
-        glyph.textContent = FREE_GLYPH;
-      } else {
-        var idx = i < 4 ? i : i - 1;
-        cell.className = "cell";
-        glyph.textContent = picks[idx];
-      }
+      cell.className = "cell";
+      glyph.textContent = picks[i];
       cell.appendChild(glyph);
       card.appendChild(cell);
     }

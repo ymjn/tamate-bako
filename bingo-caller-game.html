@@ -180,7 +180,21 @@
   "use strict";
 
   // 動物の絵柄プール。重複なしで1つずつ引いていき、全部引いたらリセットするまで打ち止め。
-  var ANIMALS = ["🐶", "🐱", "🐰", "🐻", "🐼", "🦁", "🐸", "🐷", "🐵", "🐮", "🐔", "🐘"];
+  // 顔だけの絵文字は認識しにくいため、全身が描かれた絵柄で統一している。
+  var ANIMALS = [
+      "🐀",
+      "🐄",
+      "🐅",
+      "🐌",
+      "🐍",
+      "🐘",
+      "🐞",
+      "🐢",
+      "🐳",
+      "🦈",
+      "🦒",
+      "🦓",
+  ];
   var STORAGE_KEY = "tamatebako_bingo_caller_v1";
 
   var bigDisplay = document.getElementById("big-display");
@@ -380,7 +394,7 @@
     }
   }
 
-  var DRAW_DURATION_SEC = 2.2;
+  var DRAW_DURATION_SEC = 4.4;
   var revealTimer = null;
 
   function runDraw() {
