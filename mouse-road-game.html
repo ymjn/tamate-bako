@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>ねずみのおさんぽ</title>
+<style>
+  :root { color-scheme: light; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    background: linear-gradient(135deg, #ffd6e8, #cdeaff, #fff3bf, #d9f7d9);
+    background-size: 400% 400%;
+    animation: bgshift 24s ease-in-out infinite;
+  }
+  @keyframes bgshift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  #stage {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    touch-action: none;
+  }
+  #sky {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .cloud {
+    position: absolute;
+    line-height: 1;
+    opacity: 0.85;
+    animation-name: driftCloud;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+  @keyframes driftCloud {
+    0%   { transform: translateX(-20vw); }
+    100% { transform: translateX(120vw); }
+  }
+  #ground {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 44vh;
+    background: linear-gradient(180deg, #9cd97a, #77bd58);
+    z-index: 2;
+  }
+  .lane {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 10vh;
+    overflow: visible;
+    background: #d9b98a;
+    border-top: 3px solid #c6a06e;
+    border-bottom: 3px solid #c6a06e;
+  }
+  #lane1 { top: 8vh; }
+  #lane2 { top: 26vh; }
+  .critter, .obstacle {
+    position: absolute;
+    bottom: 2px;
+    line-height: 1;
+    transform-origin: center bottom;
+    filter: drop-shadow(0 5px 7px rgba(0,0,0,0.2));
+    will-change: transform;
+    cursor: pointer;
+  }
+  .critter {
+    font-size: clamp(56px, 13vw, 92px);
+    z-index: 5;
+  }
+  .critter.walking {
+    animation: walkBob 0.5s ease-in-out infinite;
+  }
+  @keyframes walkBob {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25%      { transform: translateY(-10px) rotate(-4deg); }
+    50%      { transform: translateY(0) rotate(0deg); }
+    75%      { transform: translateY(-10px) rotate(4deg); }
+  }
+  .critter.blocked {
+    animation: idleSniff 1.4s ease-in-out infinite;
+  }
+  @keyframes idleSniff {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50%      { transform: translateY(-4px) rotate(-3deg); }
+  }
+  .critter.happy {
+    animation: happyHop 0.5s ease-out;
+  }
+  @keyframes happyHop {
+    0%   { transform: translateY(0) scale(1) rotate(0deg); }
+    30%  { transform: translateY(-28px) scale(1.15) rotate(-8deg); }
+    55%  { transform: translateY(0) scale(0.95) rotate(6deg); }
+    80%  { transform: translateY(-12px) scale(1.05) rotate(-3deg); }
+    100% { transform: translateY(0) scale(1) rotate(0deg); }
+  }
+  .critter.shiver {
+    animation: shiverAnim 0.3s ease-in-out;
+  }
+  @keyframes shiverAnim {
+    0%, 100% { transform: translateX(0) rotate(0deg); }
+    20%      { transform: translateX(-3px) rotate(-3deg); }
+    40%      { transform: translateX(3px) rotate(3deg); }
+    60%      { transform: translateX(-2px) rotate(-2deg); }
+    80%      { transform: translateX(2px) rotate(2deg); }
+  }
+  .obstacle {
+    z-index: 4;
+    cursor: pointer;
+    animation: popin 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+               obstacleGlow 1.1s ease-in-out infinite;
+  }
+  @keyframes popin {
+    0%   { transform: scale(0); opacity: 0; }
+    70%  { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes obstacleGlow {
+    0%, 100% { filter: drop-shadow(0 5px 7px rgba(0,0,0,0.2)) drop-shadow(0 0 2px gold); }
+    50%      { filter: drop-shadow(0 5px 7px rgba(0,0,0,0.2)) drop-shadow(0 0 18px gold); }
+  }
+  .obstacle.popping {
+    animation: popout 0.28s ease-out forwards;
+    pointer-events: none;
+  }
+  @keyframes popout {
+    0%   { transform: scale(1); opacity: 1; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+  .particle {
+    position: absolute;
+    pointer-events: none;
+    will-change: transform, opacity;
+    animation-name: burst;
+    animation-timing-function: ease-out;
+    animation-fill-mode: forwards;
+  }
+  @keyframes burst {
+    0%   { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 1; }
+    100% { transform: translate(var(--dx), var(--dy)) scale(var(--end-scale, 0.4)) rotate(var(--rot, 0deg)); opacity: 0; }
+  }
+  #celebrate {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22vw;
+    pointer-events: none;
+    opacity: 0;
+    z-index: 999;
+  }
+  #celebrate.show {
+    animation: celebrate 1.1s ease-out forwards;
+  }
+  @keyframes celebrate {
+    0%   { transform: scale(0.3) rotate(-8deg); opacity: 0; }
+    30%  { transform: scale(1.2) rotate(4deg); opacity: 1; }
+    60%  { transform: scale(1) rotate(-2deg); opacity: 1; }
+    100% { transform: scale(1.4) rotate(0deg); opacity: 0; }
+  }
+  #back-btn {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    text-decoration: none;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    z-index: 2000;
+    touch-action: manipulation;
+    transition: transform 0.15s ease;
+  }
+  #back-btn:active {
+    transform: scale(0.9);
+  }
+</style>
+</head>
+<body>
+<a id="back-btn" href="index.html" aria-label="もくじにもどる">⬅️</a>
+<div id="stage">
+  <div id="sky"></div>
+  <div id="ground">
+    <div id="lane1" class="lane">
+      <div id="mouse1" class="critter">🐁</div>
+    </div>
+    <div id="lane2" class="lane">
+      <div id="mouse2" class="critter">🐀</div>
+    </div>
+  </div>
+</div>
+<div id="celebrate"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var stage = document.getElementById("stage");
+  var sky = document.getElementById("sky");
+  var celebrate = document.getElementById("celebrate");
+
+  var OBSTACLE_EMOJI = ["🪨", "🍄", "📦", "🧱", "🪵", "🌰", "🍂"];
+  var CELEBRATE_EMOJI = ["🎉", "🌟", "👏", "💐"];
+
+  var STOP_GAP = 100;
+  var CLEAR_MILESTONE = 6;
+  var FREEZE_DURATION = [900, 1300];
+
+  var clearedCount = 0;
+  var audioCtx = null;
+
+  function rand(min, max) { return Math.random() * (max - min) + min; }
+
+  function ensureAudio() {
+    if (!audioCtx) {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      } catch (e) { /* audio unavailable, ignore */ }
+    }
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume();
+    }
+  }
+
+  // --- 障害物を消したときの効果音バリエーション。毎回ランダムに選ぶ ---
+  var CLEAR_SOUND_VARIANTS = [
+    function crumble(t0) {
+      [260, 190, 140].forEach(function (freq, i) {
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        var start = t0 + i * 0.05;
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.22, start + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.12);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(start);
+        osc.stop(start + 0.14);
+      });
+    },
+    function poof(t0) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(500, t0);
+      osc.frequency.exponentialRampToValueAtTime(160, t0 + 0.18);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.3, t0 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.24);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.26);
+    },
+    function boing(t0) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(300, t0);
+      osc.frequency.linearRampToValueAtTime(760, t0 + 0.08);
+      osc.frequency.linearRampToValueAtTime(480, t0 + 0.2);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.3, t0 + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.28);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.3);
+    },
+    function twinkle(t0) {
+      [740, 1180].forEach(function (freq, i) {
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        var start = t0 + i * 0.07;
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.26, start + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(start);
+        osc.stop(start + 0.2);
+      });
+    }
+  ];
+
+  function playClearSound() {
+    if (!audioCtx) return;
+    var variant = CLEAR_SOUND_VARIANTS[Math.floor(Math.random() * CLEAR_SOUND_VARIANTS.length)];
+    variant(audioCtx.currentTime);
+  }
+
+  // --- ネズミ本体をタップして驚かせたときの効果音バリエーション ---
+  var SURPRISE_SOUND_VARIANTS = [
+    function squeakUp(t0) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(900, t0);
+      osc.frequency.linearRampToValueAtTime(1300, t0 + 0.05);
+      osc.frequency.linearRampToValueAtTime(650, t0 + 0.16);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.22, t0 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.18);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.2);
+    },
+    function wobble(t0) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(500, t0);
+      for (var i = 1; i <= 5; i++) {
+        osc.frequency.linearRampToValueAtTime(i % 2 ? 850 : 450, t0 + i * 0.04);
+      }
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.22, t0 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.24);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.26);
+    },
+    function gulp(t0) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(700, t0);
+      osc.frequency.exponentialRampToValueAtTime(260, t0 + 0.12);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.24, t0 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.15);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.17);
+    }
+  ];
+
+  function playSurpriseSound() {
+    if (!audioCtx) return;
+    var variant = SURPRISE_SOUND_VARIANTS[Math.floor(Math.random() * SURPRISE_SOUND_VARIANTS.length)];
+    variant(audioCtx.currentTime);
+  }
+
+  function playCelebrationChime() {
+    if (!audioCtx) return;
+    var t0 = audioCtx.currentTime;
+    [523, 659, 784, 1047].forEach(function (freq, i) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      var start = t0 + i * 0.09;
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.3, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.3);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(start);
+      osc.stop(start + 0.32);
+    });
+  }
+
+  // --- パーティクル演出バリエーション。障害物ごとにランダムに選ぶ ---
+  var PARTICLE_VARIANTS = [
+    { glyphs: ["💨"], count: 6, angle: [0, Math.PI * 2], dist: [30, 70], rot: [0, 0], duration: 500, size: [22, 36] },
+    { glyphs: ["✨", "⭐️", "🌟"], count: 7, angle: [0, Math.PI * 2], dist: [40, 110], rot: [0, 0], duration: 600, size: [16, 30] },
+    { glyphs: ["🍃", "🌿"], count: 6, angle: [-Math.PI * 0.9, -Math.PI * 0.1], dist: [50, 110], rot: [-40, 40], duration: 750, size: [18, 28] },
+    { glyphs: ["🔸", "🔹", "⚪"], count: 8, angle: [0, Math.PI * 2], dist: [40, 90], rot: [0, 0], duration: 550, size: [12, 20] }
+  ];
+
+  // 左向きに歩くので、足元の砂ぼこりは後方(右側)へ向かって舞う
+  var FOOTSTEP_VARIANT = { glyphs: ["💨"], count: 1, angle: [-Math.PI * 0.3, Math.PI * 0.3], dist: [8, 18], rot: [0, 0], duration: 350, size: [10, 16] };
+
+  function burstParticles(x, y, variant) {
+    var v = variant || PARTICLE_VARIANTS[Math.floor(Math.random() * PARTICLE_VARIANTS.length)];
+    for (var i = 0; i < v.count; i++) {
+      var p = document.createElement("div");
+      p.className = "particle";
+      p.textContent = v.glyphs[Math.floor(Math.random() * v.glyphs.length)];
+      var size = rand(v.size[0], v.size[1]);
+      p.style.fontSize = size + "px";
+      p.style.left = (x - size / 2) + "px";
+      p.style.top = (y - size / 2) + "px";
+      var angle = rand(v.angle[0], v.angle[1]);
+      var dist = rand(v.dist[0], v.dist[1]);
+      p.style.setProperty("--dx", Math.cos(angle) * dist + "px");
+      p.style.setProperty("--dy", Math.sin(angle) * dist + "px");
+      p.style.setProperty("--rot", rand(v.rot[0], v.rot[1]) + "deg");
+      p.style.animationDuration = v.duration + "ms";
+      stage.appendChild(p);
+      (function (node, life) {
+        setTimeout(function () { node.remove(); }, life + 50);
+      })(p, v.duration);
+    }
+  }
+
+  function showCelebration() {
+    celebrate.textContent = CELEBRATE_EMOJI[Math.floor(Math.random() * CELEBRATE_EMOJI.length)];
+    celebrate.classList.remove("show");
+    void celebrate.offsetWidth;
+    celebrate.classList.add("show");
+  }
+
+  // --- 空を漂う雲。ゲームの状態に関係なく常に流れ続ける背景演出 ---
+  function spawnClouds() {
+    var CLOUDS = [
+      { top: "5%", size: 42, duration: 42, delay: -4 },
+      { top: "11%", size: 30, duration: 55, delay: -22 }
+    ];
+    CLOUDS.forEach(function (c) {
+      var el = document.createElement("div");
+      el.className = "cloud";
+      el.textContent = "☁️";
+      el.style.top = c.top;
+      el.style.fontSize = c.size + "px";
+      el.style.animationDuration = c.duration + "s";
+      el.style.animationDelay = c.delay + "s";
+      sky.appendChild(el);
+    });
+  }
+
+  // --- 1レーン分のゲームロジック。ネズミは右から左へ歩き、障害物は進行方向(左側)に現れる。
+  //     画面左端まで歩ききったら、そのまま画面外に消えて右端から歩いてくる ---
+  function createLane(pathEl, mouseEl, speed) {
+    var lane = {
+      mouseX: 0,
+      mouseWidth: 0,
+      state: "walking", // "walking" | "blocked"
+      pendingObstacle: null,
+      stepTimer: 0,
+      frozen: false
+    };
+
+    function updateMousePosition() {
+      mouseEl.style.left = lane.mouseX + "px";
+    }
+
+    function onMouseTap(ev) {
+      ev.preventDefault();
+      ensureAudio();
+      if (lane.frozen) return;
+      lane.frozen = true;
+      mouseEl.classList.remove("walking", "blocked", "happy");
+      mouseEl.classList.add("shiver");
+      playSurpriseSound();
+      var duration = rand(FREEZE_DURATION[0], FREEZE_DURATION[1]);
+      setTimeout(function () {
+        lane.frozen = false;
+        mouseEl.classList.remove("shiver");
+        mouseEl.classList.add(lane.state === "blocked" ? "blocked" : "walking");
+      }, duration);
+    }
+
+    function blockMouse() {
+      lane.state = "blocked";
+      mouseEl.classList.remove("walking");
+      mouseEl.classList.add("blocked");
+    }
+
+    function resumeWalking(withHappyHop) {
+      lane.state = "walking";
+      mouseEl.classList.remove("blocked");
+      if (withHappyHop) {
+        mouseEl.classList.add("happy");
+        setTimeout(function () {
+          mouseEl.classList.remove("happy");
+          mouseEl.classList.add("walking");
+        }, 480);
+      } else {
+        mouseEl.classList.add("walking");
+      }
+      scheduleNextObstacle();
+    }
+
+    function scheduleNextObstacle() {
+      if (lane.pendingObstacle) return;
+      var delay = rand(1400, 3200);
+      setTimeout(function () {
+        if (lane.pendingObstacle) return;
+        trySpawnObstacle();
+      }, delay);
+    }
+
+    function trySpawnObstacle() {
+      if (lane.pendingObstacle) return;
+      var ahead = rand(190, 340);
+      var spawnX = lane.mouseX - ahead;
+      var leftLimit = 60;
+      if (spawnX < leftLimit) {
+        setTimeout(trySpawnObstacle, 600);
+        return;
+      }
+      spawnObstacleAt(spawnX);
+    }
+
+    function spawnObstacleAt(x) {
+      var emoji = OBSTACLE_EMOJI[Math.floor(Math.random() * OBSTACLE_EMOJI.length)];
+      var size = rand(56, 88);
+      var el = document.createElement("div");
+      el.className = "obstacle";
+      el.textContent = emoji;
+      el.style.fontSize = size + "px";
+      el.style.left = x + "px";
+      pathEl.appendChild(el);
+      lane.pendingObstacle = el;
+
+      el.addEventListener("pointerdown", function (ev) {
+        ev.preventDefault();
+        clearObstacle(el, ev.clientX, ev.clientY);
+      }, { passive: false });
+    }
+
+    function clearObstacle(el, clientX, clientY) {
+      if (el.classList.contains("popping")) return;
+      ensureAudio();
+      el.classList.add("popping");
+      burstParticles(clientX, clientY);
+      playClearSound();
+      lane.pendingObstacle = null;
+      clearedCount++;
+      if (clearedCount % CLEAR_MILESTONE === 0) {
+        showCelebration();
+        playCelebrationChime();
+      }
+      setTimeout(function () { el.remove(); }, 320);
+      resumeWalking(true);
+    }
+
+    function step(dt) {
+      if (lane.frozen || lane.state !== "walking") return;
+      var newX = lane.mouseX - speed * dt;
+
+      if (lane.pendingObstacle) {
+        var ox = parseFloat(lane.pendingObstacle.style.left);
+        if (newX - STOP_GAP <= ox) {
+          lane.mouseX = ox + STOP_GAP;
+          updateMousePosition();
+          blockMouse();
+          return;
+        }
+      }
+
+      lane.mouseX = newX;
+
+      // 画面の左外に完全に出たら、そのまま右外から歩いてくる
+      if (lane.mouseX + lane.mouseWidth < 0) {
+        lane.mouseX = window.innerWidth;
+      }
+
+      updateMousePosition();
+
+      lane.stepTimer += dt;
+      if (lane.stepTimer > 0.45) {
+        lane.stepTimer = 0;
+        var r = mouseEl.getBoundingClientRect();
+        burstParticles(r.left + r.width * 0.75, r.top + r.height * 0.94, FOOTSTEP_VARIANT);
+      }
+    }
+
+    function init() {
+      lane.mouseWidth = mouseEl.getBoundingClientRect().width;
+      lane.mouseX = window.innerWidth - lane.mouseWidth - 16;
+      updateMousePosition();
+      mouseEl.classList.add("walking");
+      mouseEl.addEventListener("pointerdown", onMouseTap, { passive: false });
+      setTimeout(scheduleNextObstacle, 1800);
+    }
+
+    return { step: step, init: init };
+  }
+
+  var lane1 = createLane(document.getElementById("lane1"), document.getElementById("mouse1"), 58);
+  var lane2 = createLane(document.getElementById("lane2"), document.getElementById("mouse2"), 70);
+
+  var lastTs = null;
+  function frame(ts) {
+    var dt = lastTs ? (ts - lastTs) / 1000 : 0;
+    lastTs = ts;
+    lane1.step(dt);
+    lane2.step(dt);
+    requestAnimationFrame(frame);
+  }
+
+  document.addEventListener("touchmove", function (e) { e.preventDefault(); }, { passive: false });
+  document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  document.addEventListener("dblclick", function (e) { e.preventDefault(); });
+  document.addEventListener("pointerdown", ensureAudio, { once: true });
+
+  spawnClouds();
+  lane1.init();
+  lane2.init();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
