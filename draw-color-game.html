@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>おえかきクレヨン</title>
+<style>
+  :root { color-scheme: light; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    background: linear-gradient(135deg, #ffd6e8, #cdeaff, #fff3bf, #d9f7d9);
+    background-size: 400% 400%;
+    animation: bgshift 24s ease-in-out infinite;
+  }
+  @keyframes bgshift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  #canvas {
+    position: fixed;
+    inset: 0;
+    display: block;
+    touch-action: none;
+  }
+  .particle {
+    position: fixed;
+    pointer-events: none;
+    border-radius: 50%;
+    will-change: transform, opacity;
+    animation-name: burst;
+    animation-timing-function: ease-out;
+    animation-fill-mode: forwards;
+  }
+  @keyframes burst {
+    0%   { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 1; }
+    100% { transform: translate(var(--dx), var(--dy)) scale(0.3) rotate(var(--rot, 0deg)); opacity: 0; }
+  }
+  #back-btn, #clear-btn {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    text-decoration: none;
+    border: none;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    z-index: 2000;
+    touch-action: manipulation;
+    transition: transform 0.15s ease;
+  }
+  #back-btn { left: max(12px, env(safe-area-inset-left)); }
+  #clear-btn { right: max(12px, env(safe-area-inset-right)); }
+  #back-btn:active, #clear-btn:active { transform: scale(0.9); }
+  #palette {
+    position: fixed;
+    left: 50%;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    max-width: min(94vw, 520px);
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.7);
+    border-radius: 40px;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+    z-index: 1500;
+  }
+  .swatch {
+    flex: 0 0 auto;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+    touch-action: manipulation;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .swatch.selected {
+    transform: scale(1.18);
+    box-shadow: 0 0 0 4px rgba(255,255,255,0.95), 0 4px 10px rgba(0,0,0,0.25);
+  }
+  .swatch.bounce {
+    animation: swatchBounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes swatchBounce {
+    0%   { transform: scale(0.8); }
+    60%  { transform: scale(1.3); }
+    100% { transform: scale(1.18); }
+  }
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<a id="back-btn" href="index.html" aria-label="もくじにもどる">⬅️</a>
+<button id="clear-btn" aria-label="ぜんぶけす">🗑️</button>
+<div id="palette"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var canvas = document.getElementById("canvas");
+  var ctx = canvas.getContext("2d");
+  var clearBtn = document.getElementById("clear-btn");
+  var palette = document.getElementById("palette");
+
+  var COLORS = ["#ff4d6d", "#ff9f40", "#ffd43b", "#69db7c", "#4dabf7", "#9775fa", "#f783ac", "#a9704f"];
+
+  var audioCtx = null;
+
+  function ensureAudio() {
+    if (!audioCtx) {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      } catch (e) { /* オーディオが使えない環境は無視 */ }
+    }
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume();
+    }
+  }
+
+  function rand(min, max) { return Math.random() * (max - min) + min; }
+
+  // --- キャンバスの初期化・リサイズ ---
+  // 描いた線は消えない仕様なので、リサイズ時にキャンバスサイズが変わっても
+  // history から全部描き直して絵が消えないようにする。
+  var history = [];
+
+  function resizeCanvas() {
+    var dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(window.innerWidth * dpr);
+    canvas.height = Math.round(window.innerHeight * dpr);
+    canvas.style.width = window.innerWidth + "px";
+    canvas.style.height = window.innerHeight + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    history.forEach(function (cmd) {
+      if (cmd.type === "dot") {
+        paintDot(cmd.x, cmd.y, cmd.color, cmd.width);
+      } else {
+        paintSegment(cmd.x0, cmd.y0, cmd.x1, cmd.y1, cmd.color, cmd.width);
+      }
+    });
+  }
+  window.addEventListener("resize", resizeCanvas);
+  resizeCanvas();
+
+  // --- クレヨン風の描画: 本線に薄い白のハイライトを重ねて、ろうそくっぽい質感にする ---
+  function paintDot(x, y, color, width) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, width / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(x, y, width * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function paintSegment(x0, y0, x1, y1, color, width) {
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+    ctx.globalAlpha = 0.25;
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = width * 0.35;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function addDot(x, y, color, width) {
+    history.push({ type: "dot", x: x, y: y, color: color, width: width });
+    paintDot(x, y, color, width);
+  }
+
+  function addSegment(x0, y0, x1, y1, color, width) {
+    history.push({ type: "seg", x0: x0, y0: y0, x1: x1, y1: y1, color: color, width: width });
+    paintSegment(x0, y0, x1, y1, color, width);
+  }
+
+  function clearCanvas() {
+    history = [];
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+    ctx.setTransform(window.devicePixelRatio || 1, 0, 0, window.devicePixelRatio || 1, 0, 0);
+  }
+
+  // --- 色えらび ---
+  var currentColorIndex = Math.floor(rand(0, COLORS.length));
+  var swatchEls = [];
+
+  COLORS.forEach(function (color, i) {
+    var el = document.createElement("div");
+    el.className = "swatch";
+    el.style.background = color;
+    if (i === currentColorIndex) el.classList.add("selected");
+    palette.appendChild(el);
+    swatchEls.push(el);
+
+    el.addEventListener("pointerdown", function (ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      selectColor(i, ev.clientX, ev.clientY);
+    }, { passive: false });
+  });
+
+  function selectColor(i, x, y) {
+    ensureAudio();
+    if (i !== currentColorIndex) {
+      swatchEls[currentColorIndex].classList.remove("selected");
+      currentColorIndex = i;
+      var el = swatchEls[i];
+      el.classList.add("selected");
+      el.classList.remove("bounce");
+      void el.offsetWidth;
+      el.classList.add("bounce");
+    }
+    burstDots(x, y, COLORS[i]);
+    playSelectSound(freqForColor(i));
+  }
+
+  function freqForColor(i) { return 260 + i * 70; }
+
+  // --- 選んだ色の小さな粒が散る演出 ---
+  function burstDots(x, y, color) {
+    var count = Math.floor(rand(5, 8));
+    for (var i = 0; i < count; i++) {
+      var p = document.createElement("div");
+      p.className = "particle";
+      var size = rand(8, 14);
+      p.style.width = size + "px";
+      p.style.height = size + "px";
+      p.style.background = color;
+      p.style.left = (x - size / 2) + "px";
+      p.style.top = (y - size / 2) + "px";
+      var angle = rand(0, Math.PI * 2);
+      var dist = rand(20, 46);
+      p.style.setProperty("--dx", Math.cos(angle) * dist + "px");
+      p.style.setProperty("--dy", Math.sin(angle) * dist + "px");
+      var duration = rand(400, 600);
+      p.style.animationDuration = duration + "ms";
+      document.body.appendChild(p);
+      (function (node, life) {
+        setTimeout(function () { node.remove(); }, life + 60);
+      })(p, duration);
+    }
+  }
+
+  // --- 音: 色を選んだときの確認音(2種類からランダム) ---
+  var SELECT_VARIANTS = [
+    function selectA(t0, freq) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, t0);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.4, t0 + 0.08);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.22, t0 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.18);
+    },
+    function selectB(t0, freq) {
+      [1, 1.5].forEach(function (mult, i) {
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        var start = t0 + i * 0.06;
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(freq * mult, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.2, start + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.13);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(start);
+        osc.stop(start + 0.15);
+      });
+    }
+  ];
+
+  function playSelectSound(freq) {
+    if (!audioCtx) return;
+    var variant = SELECT_VARIANTS[Math.floor(Math.random() * SELECT_VARIANTS.length)];
+    variant(audioCtx.currentTime, freq);
+  }
+
+  // --- 音: なぞっている間に鳴らすクレヨンの音(色ごとに音の高さが変わる) ---
+  var SCRATCH_VARIANTS = [
+    function scratchA(t0, freq) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(freq, t0);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.85, t0 + 0.05);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.06, t0 + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.07);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.08);
+    },
+    function scratchB(t0, freq) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(freq * 1.1, t0);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.045, t0 + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.05);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.06);
+    },
+    function scratchC(t0, freq) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq * 0.9, t0);
+      osc.frequency.linearRampToValueAtTime(freq * 1.05, t0 + 0.04);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.05, t0 + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.09);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.1);
+    }
+  ];
+
+  function playScratch(freq) {
+    if (!audioCtx) return;
+    var variant = SCRATCH_VARIANTS[Math.floor(Math.random() * SCRATCH_VARIANTS.length)];
+    variant(audioCtx.currentTime, freq);
+  }
+
+  function playClearSound() {
+    if (!audioCtx) return;
+    var t0 = audioCtx.currentTime;
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(700, t0);
+    osc.frequency.exponentialRampToValueAtTime(180, t0 + 0.3);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.22, t0 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.35);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.36);
+  }
+
+  // --- ポインター(指)の追跡 ---
+  // 複数本指で同時に描いても良いよう、pointerIdごとに状態を持つ。
+  // 色は描き始めた瞬間の色で固定し、線の途中で色が切り替わらないようにする。
+  var pointers = new Map();
+
+  function handleDown(e) {
+    e.preventDefault();
+    ensureAudio();
+    if (canvas.setPointerCapture) {
+      try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    }
+    var state = {
+      x: e.clientX,
+      y: e.clientY,
+      color: COLORS[currentColorIndex],
+      width: rand(12, 18),
+      distSinceSound: 0,
+      soundThreshold: rand(18, 34)
+    };
+    pointers.set(e.pointerId, state);
+    addDot(e.clientX, e.clientY, state.color, state.width);
+    playScratch(freqForColor(currentColorIndex));
+  }
+
+  function handleMove(e) {
+    var state = pointers.get(e.pointerId);
+    if (!state) return;
+    e.preventDefault();
+    var x = e.clientX, y = e.clientY;
+    var dist = Math.hypot(x - state.x, y - state.y);
+    if (dist > 0.5) {
+      addSegment(state.x, state.y, x, y, state.color, state.width);
+    }
+
+    state.distSinceSound += dist;
+    if (state.distSinceSound >= state.soundThreshold) {
+      playScratch(freqForColor(currentColorIndex));
+      state.distSinceSound = 0;
+      state.soundThreshold = rand(18, 34);
+    }
+
+    state.x = x;
+    state.y = y;
+  }
+
+  function handleUp(e) {
+    pointers.delete(e.pointerId);
+  }
+
+  canvas.addEventListener("pointerdown", handleDown, { passive: false });
+  canvas.addEventListener("pointermove", handleMove, { passive: false });
+  canvas.addEventListener("pointerup", handleUp, { passive: false });
+  canvas.addEventListener("pointercancel", handleUp, { passive: false });
+
+  clearBtn.addEventListener("pointerdown", function (ev) {
+    ev.preventDefault();
+    ensureAudio();
+    pointers.clear();
+    clearCanvas();
+    playClearSound();
+  }, { passive: false });
+
+  // --- キッズプルーフ: ピンチズーム・スクロール・誤操作によるページ遷移を防止 ---
+  document.addEventListener("touchmove", function (e) { e.preventDefault(); }, { passive: false });
+  document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  document.addEventListener("dblclick", function (e) { e.preventDefault(); });
+  document.addEventListener("pointerdown", ensureAudio, { once: true });
+})();
+</script>
+</body>
+</html>
