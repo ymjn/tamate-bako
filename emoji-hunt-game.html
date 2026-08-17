@@ -370,11 +370,12 @@
     if (roundLocked) return;
     ensureAudio();
     var rect = el.getBoundingClientRect();
+    var stageRect = stage.getBoundingClientRect();
 
     if (emoji === currentTarget) {
       roundLocked = true;
       el.classList.add("correct");
-      burstParticles(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      burstParticles(rect.left + rect.width / 2 - stageRect.left, rect.top + rect.height / 2 - stageRect.top);
       playSuccessSound();
 
       foundCount++;
