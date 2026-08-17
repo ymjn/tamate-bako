@@ -222,6 +222,18 @@
     }
   }
 
+  // resume() は非同期のため、生成直後の最初のタップでは resume 完了前に音を鳴らそうとして
+  // 無音になることがある。再生関数は必ずこれを経由し、running になってから鳴らす。
+  function withAudio(playFn) {
+    ensureAudio();
+    if (!audioCtx) return;
+    if (audioCtx.state === "running") {
+      playFn();
+    } else {
+      audioCtx.resume().then(playFn);
+    }
+  }
+
   function rand(min, max) { return Math.random() * (max - min) + min; }
 
   function shuffle(array) {
@@ -368,7 +380,6 @@
 
   function onTileTap(el, emoji) {
     if (roundLocked) return;
-    ensureAudio();
     var rect = el.getBoundingClientRect();
     var stageRect = stage.getBoundingClientRect();
 
@@ -376,12 +387,12 @@
       roundLocked = true;
       el.classList.add("correct");
       burstParticles(rect.left + rect.width / 2 - stageRect.left, rect.top + rect.height / 2 - stageRect.top);
-      playSuccessSound();
+      withAudio(playSuccessSound);
 
       foundCount++;
       if (foundCount % FOUND_MILESTONE === 0) {
         showCelebration();
-        playMilestoneChime();
+        withAudio(playMilestoneChime);
       }
 
       setTimeout(function () {
@@ -391,7 +402,7 @@
     } else {
       if (el.classList.contains("wrong")) return;
       el.classList.add("wrong");
-      playMissSound();
+      withAudio(playMissSound);
       setTimeout(function () {
         el.classList.remove("wrong");
       }, 420);
