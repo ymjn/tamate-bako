@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>えもじさがし</title>
+<style>
+  :root { color-scheme: light; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    background: linear-gradient(135deg, #ffd6e8, #cdeaff, #fff3bf, #d9f7d9);
+    background-size: 400% 400%;
+    animation: bgshift 24s ease-in-out infinite;
+  }
+  @keyframes bgshift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  #app {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  #target-section {
+    flex: none;
+    height: 24vh;
+    box-sizing: border-box;
+    padding-top: max(10px, env(safe-area-inset-top));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3vw;
+  }
+  #hint-icon {
+    font-size: clamp(28px, 8vw, 48px);
+    line-height: 1;
+    animation: peek 1.8s ease-in-out infinite;
+  }
+  @keyframes peek {
+    0%, 100% { transform: rotate(-10deg); }
+    50%      { transform: rotate(10deg); }
+  }
+  #target-card {
+    background: rgba(255, 255, 255, 0.85);
+    border-radius: 32px;
+    padding: 1.6vh 4vw;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+  #target-display {
+    font-size: clamp(50px, 15vh, 120px);
+    line-height: 1;
+  }
+  #target-display.settle {
+    animation: settle 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes settle {
+    0%   { transform: scale(0.6); opacity: 0.4; }
+    60%  { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  #stage {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
+    touch-action: none;
+  }
+  .tile {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    cursor: pointer;
+    touch-action: none;
+    filter: drop-shadow(0 6px 10px rgba(0,0,0,0.15));
+    animation: popin 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    will-change: transform;
+  }
+  @keyframes popin {
+    0%   { transform: scale(0); opacity: 0; }
+    70%  { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .tile.correct {
+    animation: foundPop 0.5s ease-out forwards;
+    pointer-events: none;
+  }
+  @keyframes foundPop {
+    0%   { transform: scale(1) rotate(0deg); opacity: 1; }
+    40%  { transform: scale(1.35) rotate(-6deg); opacity: 1; }
+    100% { transform: scale(0.2) rotate(10deg); opacity: 0; }
+  }
+  .tile.wrong {
+    animation: wobble 0.4s ease-in-out;
+  }
+  @keyframes wobble {
+    0%, 100% { transform: translateX(0) rotate(0deg); }
+    20%      { transform: translateX(-8px) rotate(-8deg); }
+    40%      { transform: translateX(7px) rotate(7deg); }
+    60%      { transform: translateX(-6px) rotate(-6deg); }
+    80%      { transform: translateX(5px) rotate(5deg); }
+  }
+  .particle {
+    position: absolute;
+    pointer-events: none;
+    will-change: transform, opacity;
+    animation-name: burst;
+    animation-timing-function: ease-out;
+    animation-fill-mode: forwards;
+  }
+  @keyframes burst {
+    0%   { transform: translate(0, 0) scale(1) rotate(0deg); opacity: 1; }
+    100% { transform: translate(var(--dx), var(--dy)) scale(0.4) rotate(var(--rot, 0deg)); opacity: 0; }
+  }
+  #celebrate {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22vw;
+    pointer-events: none;
+    opacity: 0;
+  }
+  #celebrate.show {
+    animation: celebrate 1.1s ease-out forwards;
+  }
+  @keyframes celebrate {
+    0%   { transform: scale(0.3) rotate(-8deg); opacity: 0; }
+    30%  { transform: scale(1.2) rotate(4deg); opacity: 1; }
+    60%  { transform: scale(1) rotate(-2deg); opacity: 1; }
+    100% { transform: scale(1.4) rotate(0deg); opacity: 0; }
+  }
+  #back-btn {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    text-decoration: none;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    z-index: 2000;
+    touch-action: manipulation;
+    transition: transform 0.15s ease;
+  }
+  #back-btn:active {
+    transform: scale(0.9);
+  }
+</style>
+</head>
+<body>
+<a id="back-btn" href="index.html" aria-label="もくじにもどる">⬅️</a>
+<div id="app">
+  <div id="target-section">
+    <div id="hint-icon">🔍</div>
+    <div id="target-card"><div id="target-display">🐶</div></div>
+  </div>
+  <div id="stage"></div>
+</div>
+<div id="celebrate">🎉</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var stage = document.getElementById("stage");
+  var targetDisplay = document.getElementById("target-display");
+  var celebrate = document.getElementById("celebrate");
+
+  // 見た目がはっきり違うものだけを集め、正解と不正解を混同しにくくしている
+  var ITEMS = [
+    "🐶", "🐱", "🐰", "🐻", "🐼", "🦁", "🐸", "🐷", "🐵", "🐘", "🐢", "🦒", "🐳", "🦓",
+    "🍎", "🍌", "🍓", "🍉", "🍇", "🍊", "🍑", "🍍",
+    "🚗", "🚌", "🚀", "🚂", "✈️", "🚲", "🚁", "⛵",
+    "🌈", "☀️", "⭐️", "🌙", "☁️", "❄️",
+    "🎈", "🎁", "🎀", "🍩", "🧸", "⚽", "🎨", "🔑"
+  ];
+
+  var COLS = 3;
+  var ROWS = 3;
+  var CELL_COUNT = COLS * ROWS;
+  var FOUND_MILESTONE = 6;
+
+  var foundCount = 0;
+  var roundLocked = false;
+  var currentTarget = null;
+  var resizeTimer = null;
+  var audioCtx = null;
+
+  function ensureAudio() {
+    if (!audioCtx) {
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      } catch (e) { /* オーディオが使えない環境は無視 */ }
+    }
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume();
+    }
+  }
+
+  function rand(min, max) { return Math.random() * (max - min) + min; }
+
+  function shuffle(array) {
+    var a = array.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+    }
+    return a;
+  }
+
+  // --- 正解時の効果音バリエーション。毎回どれかがランダムに選ばれる ---
+  var SUCCESS_SOUNDS = [
+    function chimePing(t0) {
+      [784, 1175].forEach(function (freq, i) {
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        var start = t0 + i * 0.07;
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.3, start + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.2);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(start);
+        osc.stop(start + 0.22);
+      });
+    },
+    function risingPop(t0) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(440, t0);
+      osc.frequency.exponentialRampToValueAtTime(920, t0 + 0.14);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.32, t0 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.24);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.26);
+    },
+    function sparkleTriad(t0) {
+      [660, 880, 1320].forEach(function (freq, i) {
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        var start = t0 + i * 0.05;
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.25, start + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(start);
+        osc.stop(start + 0.2);
+      });
+    }
+  ];
+
+  function playSuccessSound() {
+    if (!audioCtx) return;
+    var variant = SUCCESS_SOUNDS[Math.floor(Math.random() * SUCCESS_SOUNDS.length)];
+    variant(audioCtx.currentTime);
+  }
+
+  // はずれた時は責める感じにならないよう、短く控えめな音だけにする
+  function playMissSound() {
+    if (!audioCtx) return;
+    var t0 = audioCtx.currentTime;
+    var osc = audioCtx.createOscillator();
+    var gain = audioCtx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(320, t0);
+    osc.frequency.exponentialRampToValueAtTime(260, t0 + 0.1);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.14, t0 + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.14);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.15);
+  }
+
+  function playMilestoneChime() {
+    if (!audioCtx) return;
+    var t0 = audioCtx.currentTime;
+    [523, 659, 784, 1047].forEach(function (freq, i) {
+      var osc = audioCtx.createOscillator();
+      var gain = audioCtx.createGain();
+      var start = t0 + i * 0.09;
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.3, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.3);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(start);
+      osc.stop(start + 0.32);
+    });
+  }
+
+  // --- パーティクルのバリエーション。玉が弾ける見た目を毎回変える ---
+  var PARTICLE_VARIANTS = [
+    { glyphs: ["✨", "⭐️", "💫", "🌟"], count: 8, angle: [0, Math.PI * 2], dist: [40, 120], rot: [0, 0], duration: 600, size: [18, 34] },
+    { glyphs: ["🎊", "🟡", "🔵", "🟢"], count: 10, angle: [0, Math.PI * 2], dist: [50, 100], rot: [360, 720], duration: 700, size: [14, 26] },
+    { glyphs: ["💕", "💖", "💗"], count: 6, angle: [-Math.PI * 0.85, -Math.PI * 0.15], dist: [60, 140], rot: [-40, 40], duration: 800, size: [18, 30] }
+  ];
+
+  function burstParticles(x, y) {
+    var v = PARTICLE_VARIANTS[Math.floor(Math.random() * PARTICLE_VARIANTS.length)];
+    for (var i = 0; i < v.count; i++) {
+      var p = document.createElement("div");
+      p.className = "particle";
+      p.textContent = v.glyphs[Math.floor(Math.random() * v.glyphs.length)];
+      var size = rand(v.size[0], v.size[1]);
+      p.style.fontSize = size + "px";
+      p.style.left = (x - size / 2) + "px";
+      p.style.top = (y - size / 2) + "px";
+      var angle = rand(v.angle[0], v.angle[1]);
+      var dist = rand(v.dist[0], v.dist[1]);
+      p.style.setProperty("--dx", Math.cos(angle) * dist + "px");
+      p.style.setProperty("--dy", Math.sin(angle) * dist + "px");
+      p.style.setProperty("--rot", rand(v.rot[0], v.rot[1]) + "deg");
+      p.style.animationDuration = v.duration + "ms";
+      stage.appendChild(p);
+      (function (node, life) {
+        setTimeout(function () { node.remove(); }, life + 50);
+      })(p, v.duration);
+    }
+  }
+
+  function showCelebration() {
+    celebrate.textContent = "🎉";
+    celebrate.classList.remove("show");
+    void celebrate.offsetWidth;
+    celebrate.classList.add("show");
+  }
+
+  function setTarget(emoji) {
+    currentTarget = emoji;
+    targetDisplay.textContent = emoji;
+    targetDisplay.classList.remove("settle");
+    void targetDisplay.offsetWidth;
+    targetDisplay.classList.add("settle");
+  }
+
+  function onTileTap(el, emoji) {
+    if (roundLocked) return;
+    ensureAudio();
+    var rect = el.getBoundingClientRect();
+
+    if (emoji === currentTarget) {
+      roundLocked = true;
+      el.classList.add("correct");
+      burstParticles(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      playSuccessSound();
+
+      foundCount++;
+      if (foundCount % FOUND_MILESTONE === 0) {
+        showCelebration();
+        playMilestoneChime();
+      }
+
+      setTimeout(function () {
+        newRound();
+        roundLocked = false;
+      }, 550);
+    } else {
+      if (el.classList.contains("wrong")) return;
+      el.classList.add("wrong");
+      playMissSound();
+      setTimeout(function () {
+        el.classList.remove("wrong");
+      }, 420);
+    }
+  }
+
+  function newRound() {
+    stage.innerHTML = "";
+
+    var target = ITEMS[Math.floor(Math.random() * ITEMS.length)];
+    var decoys = shuffle(ITEMS.filter(function (e) { return e !== target; })).slice(0, CELL_COUNT - 1);
+    var cellItems = shuffle([target].concat(decoys));
+
+    setTarget(target);
+
+    var stageW = stage.clientWidth;
+    var stageH = stage.clientHeight;
+    var cellW = stageW / COLS;
+    var cellH = stageH / ROWS;
+    var size = Math.max(48, Math.min(cellW, cellH) * 0.62);
+
+    cellItems.forEach(function (emoji, i) {
+      var col = i % COLS;
+      var row = Math.floor(i / COLS);
+      var jitterX = rand(-cellW * 0.18, cellW * 0.18);
+      var jitterY = rand(-cellH * 0.18, cellH * 0.18);
+      var cx = cellW * (col + 0.5) + jitterX;
+      var cy = cellH * (row + 0.5) + jitterY;
+
+      var el = document.createElement("div");
+      el.className = "tile";
+      el.textContent = emoji;
+      el.style.fontSize = size + "px";
+      el.style.width = size + "px";
+      el.style.height = size + "px";
+      el.style.left = (cx - size / 2) + "px";
+      el.style.top = (cy - size / 2) + "px";
+      el.style.animationDelay = (i * 0.03) + "s";
+
+      el.addEventListener("pointerdown", function (ev) {
+        ev.preventDefault();
+        onTileTap(el, emoji);
+      }, { passive: false });
+
+      stage.appendChild(el);
+    });
+  }
+
+  document.addEventListener("touchmove", function (e) { e.preventDefault(); }, { passive: false });
+  document.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  document.addEventListener("dblclick", function (e) { e.preventDefault(); });
+
+  document.addEventListener("pointerdown", ensureAudio, { once: true });
+
+  window.addEventListener("resize", function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      if (!roundLocked) newRound();
+    }, 200);
+  });
+
+  newRound();
+})();
+</script>
+</body>
+</html>
